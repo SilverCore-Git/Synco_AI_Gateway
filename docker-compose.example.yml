@@ -34,6 +34,9 @@ services:
       # quel site à appeler la passerelle depuis le navigateur d'un utilisateur authentifié :
       # à restreindre en production.
       ALLOWED_ORIGIN: "https://app.votre-synco.example"
+      # Ollama vit dans un conteneur séparé ici (au lieu du même conteneur pour l'image
+      # tout-en-un) : on le pointe explicitement via le nom du service Docker Compose.
+      OLLAMA_URL: "http://ollama:11434"
       RUST_LOG: info
 
 volumes:

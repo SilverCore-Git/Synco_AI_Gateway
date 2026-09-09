@@ -11,7 +11,9 @@ Le navigateur de l'utilisateur appelle **cette passerelle directement**, pas l'A
 3. Appelle votre Ollama (`/v1/chat/completions`, compatible OpenAI) avec l'historique et les tools disponibles (`GET /api/orgs/:orgId/ai/tools`), et diffuse la réponse en SSE au navigateur.
 4. Quand un tool doit s'exécuter côté serveur (créer une tâche, etc.), elle appelle `POST /api/orgs/:orgId/ai/tools/:name/execute` sur l'API Synco — **toute la logique métier et les permissions restent dans Synco**, la passerelle n'a et ne doit jamais avoir d'accès direct à une base de données.
 
-La passerelle est **sans état et sans configuration par organisation** : l'URL de votre API Synco, l'URL d'Ollama et le modèle à utiliser sont envoyés à chaque requête par le frontend (configurés dans les paramètres IA de l'organisation, provider *"Passerelle Synco AI (auto-hébergée)"*). Un seul déploiement peut donc servir n'importe quelle organisation qui le pointe correctement.
+La passerelle est **sans état et sans configuration par organisation** : l'URL de votre API Synco et le modèle à utiliser sont envoyés à chaque requête par le frontend (configurés dans les paramètres IA de l'organisation, provider *"Passerelle Synco AI (auto-hébergée)"*). Un seul déploiement peut donc servir n'importe quelle organisation qui le pointe correctement.
+
+L'URL d'Ollama, elle, **n'est pas un champ des paramètres Synco** — c'est une variable d'environnement de la passerelle (`OLLAMA_URL`, cf. plus bas), parce que c'est une décision de déploiement (où tourne Ollama par rapport à cette passerelle) et non une décision par organisation. Par défaut `http://127.0.0.1:11434`, ce qui est toujours correct avec l'image tout-en-un.
 
 ## Avant de déployer : CORS et contenu mixte
 
@@ -39,7 +41,7 @@ docker run -d \
 - GPU Nvidia : ajoutez `--gpus all` (nécessite le [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) sur l'hôte).
 - `docker logs -f synco-ai-gateway` pendant le premier démarrage : le téléchargement du modèle peut prendre plusieurs minutes selon sa taille et votre bande passante — c'est normal, le `HEALTHCHECK` laisse 5 minutes avant de s'inquiéter.
 
-Une fois `docker logs` calme (Ollama et la passerelle prêts), configurez Synco avec l'URL publique de ce conteneur pour la passerelle, et `http://localhost:11434` pour l'URL Ollama — les deux vivent dans le même conteneur, la passerelle contacte Ollama en local.
+Une fois `docker logs` calme (Ollama et la passerelle prêts), configurez Synco avec l'URL publique de ce conteneur pour la passerelle — c'est le seul champ à renseigner, Ollama vit dans le même conteneur et la passerelle le contacte toute seule en local.
 
 ### Déploiement avancé : Ollama et la passerelle séparés
 
@@ -61,21 +63,22 @@ PORT=8787 ALLOWED_ORIGIN="https://app.votre-synco.example" ./target/release/sync
 
 ## Variables d'environnement
 
-| Variable         | Défaut  | Description                                                                 |
-|------------------|---------|-------------------------------------------------------------------------------|
-| `PORT`           | `8787`  | Port d'écoute HTTP.                                                          |
-| `ALLOWED_ORIGIN` | `*`     | Origine CORS autorisée à appeler la passerelle depuis un navigateur.        |
-| `RUST_LOG`       | `info`  | Niveau de log (`tracing_subscriber::EnvFilter`, ex: `debug`, `synco_ai_gateway=debug`). |
+| Variable         | Défaut                     | Description                                                                 |
+|------------------|----------------------------|-------------------------------------------------------------------------------|
+| `PORT`           | `8787`                     | Port d'écoute HTTP.                                                          |
+| `ALLOWED_ORIGIN` | `*`                        | Origine CORS autorisée à appeler la passerelle depuis un navigateur.        |
+| `OLLAMA_URL`     | `http://127.0.0.1:11434`   | Où joindre Ollama. Ne change jamais avec l'image tout-en-un ; à surcharger uniquement pour le déploiement avancé (Ollama dans un autre conteneur/machine). |
+| `OLLAMA_MODEL`   | `llama3.2`                 | (Image tout-en-un uniquement) modèle pré-téléchargé au démarrage.            |
+| `RUST_LOG`       | `info`                     | Niveau de log (`tracing_subscriber::EnvFilter`, ex: `debug`, `synco_ai_gateway=debug`). |
 
 ## Configuration côté Synco
 
 Dans les paramètres IA de l'organisation, choisissez le provider **"Passerelle Synco AI (auto-hébergée)"** puis renseignez :
 
-- **URL de votre Synco AI Gateway** — l'URL publique de ce service.
-- **URL du serveur Ollama** — l'endpoint Ollama que la passerelle doit contacter.
-- **Modèle** — l'identifiant du modèle Ollama à utiliser (ex. `llama3.1:8b`).
+- **URL de votre Synco AI Gateway** — l'URL publique de ce service. C'est le seul champ requis.
+- **Modèle** — sélectionné dans la liste des modèles déjà présents sur Ollama (récupérée automatiquement dès que l'URL de la passerelle est renseignée), ou saisi manuellement.
 
-Aucune clé API à saisir : l'authentification passe par le compte Synco de l'utilisateur.
+Aucune clé API à saisir : l'authentification passe par le compte Synco de l'utilisateur. Aucune URL Ollama à saisir non plus : c'est la passerelle qui sait où le trouver (cf. `OLLAMA_URL` ci-dessus).
 
 ## Développement
 
