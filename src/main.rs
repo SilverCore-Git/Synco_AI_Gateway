@@ -1,4 +1,6 @@
 mod config;
+mod ollama_adapter;
+mod types;
 
 use axum::{routing::get, Router};
 use config::Config;
