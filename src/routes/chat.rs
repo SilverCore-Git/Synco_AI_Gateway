@@ -29,17 +29,34 @@ fn sse_response(stream: impl Stream<Item = WireEvent> + Send + 'static) -> Respo
     Sse::new(stream.map(wire_event_to_sse)).into_response()
 }
 
+/// L'URL de l'API Synco vue par le navigateur (VITE_API_URL) et celle vue par la passerelle ne
+/// sont pas forcément la même adresse — typiquement, si la passerelle tourne dans un conteneur
+/// Docker et que synco_api tourne sur la machine hôte, "localhost" ne désigne pas la même
+/// machine des deux côtés. SYNCO_API_URL (config de déploiement de la passerelle, cf. config.rs)
+/// a donc toujours priorité sur ce que le frontend envoie ; ce dernier ne reste qu'un filet de
+/// sécurité pour les déploiements qui n'ont pas configuré cette variable.
+fn resolve_synco_api_url(state: &AppState, from_request: Option<String>) -> Result<String, Response> {
+    state.synco_api_url.clone().or(from_request).ok_or_else(|| {
+        error_response(
+            StatusCode::BAD_REQUEST,
+            "URL de l'API Synco inconnue : configurez SYNCO_API_URL sur la passerelle (recommandé, surtout si elle tourne dans un conteneur), ou envoyez syncoApiUrl depuis le frontend.",
+        )
+    })
+}
+
 /// Champs envoyés par le frontend à chaque appel — la passerelle n'a aucune config par
-/// organisation, l'URL de l'API Synco et le modèle viennent d'ici, comme configuré dans les
-/// paramètres IA de l'org (provider "gateway"). L'URL d'Ollama, elle, est une config de
-/// déploiement de la passerelle (state.ollama_url, cf. config.rs) — pas un champ par requête.
+/// organisation, le modèle vient d'ici, comme configuré dans les paramètres IA de l'org
+/// (provider "gateway"). L'URL d'Ollama et l'URL de l'API Synco sont normalement des configs de
+/// déploiement de la passerelle (state.ollama_url / state.synco_api_url, cf. config.rs) —
+/// synco_api_url reste acceptée ici en filet de sécurité, voir resolve_synco_api_url().
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatRequest {
     pub org_id: String,
     pub session_id: Option<String>,
     pub message: String,
-    pub synco_api_url: String,
+    #[serde(default)]
+    pub synco_api_url: Option<String>,
     pub model_id: String,
 }
 
@@ -49,7 +66,11 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
         return error_response(StatusCode::UNAUTHORIZED, "Authorization Bearer token manquant.");
     };
 
-    let client = SyncoClient::new(req.synco_api_url);
+    let synco_api_url = match resolve_synco_api_url(&state, req.synco_api_url) {
+        Ok(url) => url,
+        Err(resp) => return resp,
+    };
+    let client = SyncoClient::new(synco_api_url);
 
     let session = match client.get_or_create_session(&token, &req.org_id, req.session_id.as_deref()).await {
         Ok(s) => s,
@@ -78,7 +99,8 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
 #[serde(rename_all = "camelCase")]
 pub struct ToolResultRequest {
     pub org_id: String,
-    pub synco_api_url: String,
+    #[serde(default)]
+    pub synco_api_url: Option<String>,
     pub model_id: String,
     #[serde(default)]
     pub accepted: Option<bool>,
@@ -97,7 +119,11 @@ pub async fn tool_result(
         return error_response(StatusCode::UNAUTHORIZED, "Authorization Bearer token manquant.");
     };
 
-    let client = SyncoClient::new(req.synco_api_url);
+    let synco_api_url = match resolve_synco_api_url(&state, req.synco_api_url) {
+        Ok(url) => url,
+        Err(resp) => return resp,
+    };
+    let client = SyncoClient::new(synco_api_url);
 
     let session = match client.get_session(&token, &req.org_id, &session_id).await {
         Ok(s) => s,

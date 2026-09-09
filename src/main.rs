@@ -17,6 +17,7 @@ use tracing_subscriber::EnvFilter;
 pub struct AppState {
     pub http: reqwest::Client,
     pub ollama_url: String,
+    pub synco_api_url: Option<String>,
 }
 
 #[tokio::main]
@@ -36,7 +37,11 @@ async fn main() {
             .allow_headers(Any)
     };
 
-    let state = AppState { http: reqwest::Client::new(), ollama_url: config.ollama_url.clone() };
+    let state = AppState {
+        http: reqwest::Client::new(),
+        ollama_url: config.ollama_url.clone(),
+        synco_api_url: config.synco_api_url.clone(),
+    };
 
     let app = Router::new()
         .route("/health", get(routes::health::health))
