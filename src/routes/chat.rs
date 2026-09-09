@@ -30,8 +30,9 @@ fn sse_response(stream: impl Stream<Item = WireEvent> + Send + 'static) -> Respo
 }
 
 /// Champs envoyés par le frontend à chaque appel — la passerelle n'a aucune config par
-/// organisation, tout (URL de l'API Synco, endpoint Ollama, modèle) vient d'ici, comme configuré
-/// dans les paramètres IA de l'org (provider "gateway").
+/// organisation, l'URL de l'API Synco et le modèle viennent d'ici, comme configuré dans les
+/// paramètres IA de l'org (provider "gateway"). L'URL d'Ollama, elle, est une config de
+/// déploiement de la passerelle (state.ollama_url, cf. config.rs) — pas un champ par requête.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatRequest {
@@ -39,7 +40,6 @@ pub struct ChatRequest {
     pub session_id: Option<String>,
     pub message: String,
     pub synco_api_url: String,
-    pub ollama_url: String,
     pub model_id: String,
 }
 
@@ -60,7 +60,7 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
         org_id: req.org_id,
         session_id: session.id.clone(),
         token,
-        ollama_url: req.ollama_url,
+        ollama_url: state.ollama_url.clone(),
         model_id: req.model_id,
     };
 
@@ -79,7 +79,6 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
 pub struct ToolResultRequest {
     pub org_id: String,
     pub synco_api_url: String,
-    pub ollama_url: String,
     pub model_id: String,
     #[serde(default)]
     pub accepted: Option<bool>,
@@ -116,7 +115,7 @@ pub async fn tool_result(
         org_id: req.org_id,
         session_id: session.id.clone(),
         token,
-        ollama_url: req.ollama_url,
+        ollama_url: state.ollama_url.clone(),
         model_id: req.model_id,
     };
 

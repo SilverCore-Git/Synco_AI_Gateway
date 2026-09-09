@@ -16,6 +16,7 @@ use tracing_subscriber::EnvFilter;
 #[derive(Clone)]
 pub struct AppState {
     pub http: reqwest::Client,
+    pub ollama_url: String,
 }
 
 #[tokio::main]
@@ -35,7 +36,7 @@ async fn main() {
             .allow_headers(Any)
     };
 
-    let state = AppState { http: reqwest::Client::new() };
+    let state = AppState { http: reqwest::Client::new(), ollama_url: config.ollama_url.clone() };
 
     let app = Router::new()
         .route("/health", get(routes::health::health))

@@ -1,16 +1,10 @@
 use crate::AppState;
-use axum::extract::{Query, State};
+use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{json, Value};
-
-#[derive(Deserialize)]
-pub struct ModelsQuery {
-    #[serde(rename = "ollamaUrl")]
-    ollama_url: String,
-}
 
 #[derive(Serialize)]
 pub struct ModelsResponse {
@@ -21,12 +15,13 @@ fn error_response(status: StatusCode, message: String) -> Response {
     (status, Json(json!({ "error": message }))).into_response()
 }
 
-/// GET /models?ollamaUrl=... — liste les modèles déjà présents sur le serveur Ollama de
-/// l'organisation, pour peupler le sélecteur des paramètres IA côté Synco. Passe par la
-/// passerelle (plutôt qu'un appel direct navigateur → Ollama) pour ne pas exiger une
-/// configuration CORS séparée sur Ollama pour l'origine du frontend Synco.
-pub async fn list_models(State(state): State<AppState>, Query(query): Query<ModelsQuery>) -> Response {
-    let url = format!("{}/v1/models", query.ollama_url.trim_end_matches('/'));
+/// GET /models — liste les modèles déjà présents sur le serveur Ollama de cette passerelle
+/// (state.ollama_url, une config de déploiement — cf. config.rs — pas un paramètre par requête),
+/// pour peupler le sélecteur des paramètres IA côté Synco. Passe par la passerelle (plutôt qu'un
+/// appel direct navigateur → Ollama) pour ne pas exiger une configuration CORS séparée sur
+/// Ollama pour l'origine du frontend Synco.
+pub async fn list_models(State(state): State<AppState>) -> Response {
+    let url = format!("{}/v1/models", state.ollama_url.trim_end_matches('/'));
 
     let resp = match state.http.get(&url).send().await {
         Ok(r) => r,
