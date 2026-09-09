@@ -37,7 +37,17 @@ services:
       # Ollama vit dans un conteneur séparé ici (au lieu du même conteneur pour l'image
       # tout-en-un) : on le pointe explicitement via le nom du service Docker Compose.
       OLLAMA_URL: "http://ollama:11434"
+      # URL de l'API Synco vue DEPUIS CE CONTENEUR — pas depuis le navigateur, ce n'est pas la
+      # même chose. En production, l'adresse publique HTTPS habituelle fonctionne directement.
+      # En développement local, si synco_api tourne sur la machine hôte (pas dans Compose),
+      # décommentez les deux lignes suivantes (nécessaire sur Linux ; Docker Desktop sur
+      # Mac/Windows fournit déjà host.docker.internal automatiquement) :
+      SYNCO_API_URL: "https://api.votre-synco.example"
+      # SYNCO_API_URL: "https://host.docker.internal:9000"
+      # SYNCO_API_ALLOW_INSECURE_TLS: "true"  # si synco_api local utilise son certificat auto-signé par défaut
       RUST_LOG: info
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"  # requis sur Linux pour SYNCO_API_URL=...host.docker.internal...
 
 volumes:
   ollama_data:
