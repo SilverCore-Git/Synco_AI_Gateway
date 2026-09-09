@@ -69,6 +69,7 @@ PORT=8787 ALLOWED_ORIGIN="https://app.votre-synco.example" ./target/release/sync
 | `ALLOWED_ORIGIN` | `*`                        | Origine CORS autorisée à appeler la passerelle depuis un navigateur.        |
 | `OLLAMA_URL`     | `http://127.0.0.1:11434`   | Où joindre Ollama. Ne change jamais avec l'image tout-en-un ; à surcharger uniquement pour le déploiement avancé (Ollama dans un autre conteneur/machine). |
 | `OLLAMA_MODEL`   | `llama3.2`                 | (Image tout-en-un uniquement) modèle pré-téléchargé au démarrage.            |
+| `SYNCO_API_ALLOW_INSECURE_TLS` | `false` (désactivé) | **Développement local uniquement.** Si votre API Synco tourne en HTTPS avec un certificat auto-signé (le cas par défaut de `synco_api` en local), rustls le rejette toujours — même après avoir cliqué "continuer" dans un navigateur. Mettre à `true` désactive la vérification du certificat pour les appels vers l'API Synco. Ne jamais activer en production. |
 | `RUST_LOG`       | `info`                     | Niveau de log (`tracing_subscriber::EnvFilter`, ex: `debug`, `synco_ai_gateway=debug`). |
 
 ## Configuration côté Synco
