@@ -1,6 +1,8 @@
-# Exemple de déploiement : la passerelle + un Ollama local, sur le même réseau Docker.
-# Copiez ce fichier en docker-compose.yml et ajustez ALLOWED_ORIGIN à l'origine de votre
-# instance Synco avant de lancer `docker compose up -d`.
+# Déploiement avancé : Ollama et la passerelle dans des conteneurs séparés (mise à jour
+# indépendante, Ollama éventuellement partagé). Pour une installation en une seule commande,
+# préférez l'image tout-en-un par défaut (`docker build .` avec le Dockerfile racine) — voir le
+# README. Copiez ce fichier en docker-compose.yml et ajustez ALLOWED_ORIGIN avant de lancer
+# `docker compose up -d`.
 
 services:
   ollama:
@@ -18,7 +20,9 @@ services:
     #           capabilities: [gpu]
 
   synco-ai-gateway:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway-only
     restart: unless-stopped
     depends_on:
       - ollama

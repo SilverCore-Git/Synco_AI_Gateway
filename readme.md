@@ -18,15 +18,39 @@ La passerelle est **sans état et sans configuration par organisation** : l'URL 
 - **CORS** : Ollama restreint par défaut les origines autorisées à l'appeler. Si Ollama tourne sur une machine différente de celle qui exécute cette passerelle, configurez `OLLAMA_ORIGINS` côté Ollama pour autoriser l'origine de cette passerelle.
 - **Contenu mixte (HTTPS → HTTP)** : si votre instance Synco est servie en HTTPS (le cas normal), un navigateur bloque par défaut un appel vers une URL `http://` non sécurisée — **sauf** si la cible est `localhost`/`127.0.0.1`. Concrètement : passerelle sur la même machine que celle qui ouvre le navigateur → ça fonctionne même en HTTP. Passerelle sur une autre machine du réseau → il faut l'exposer en HTTPS (reverse-proxy avec un certificat, ex. Caddy/Traefik/nginx).
 
-## Démarrage rapide (Docker)
+## Démarrage rapide (image tout-en-un)
+
+L'image par défaut (`Dockerfile`) embarque **Ollama et la passerelle dans le même conteneur** — une seule commande, un modèle pré-téléchargé automatiquement au premier démarrage :
+
+```bash
+docker build -t synco-ai-gateway .
+
+docker run -d \
+  --name synco-ai-gateway \
+  -p 8787:8787 \
+  -v synco_ollama_data:/root/.ollama \
+  -e ALLOWED_ORIGIN="https://app.votre-synco.example" \
+  -e OLLAMA_MODEL="llama3.2" \
+  synco-ai-gateway
+```
+
+- `-v synco_ollama_data:/root/.ollama` : indispensable — sans ce volume, le modèle (plusieurs Go) est retéléchargé à chaque recréation du conteneur.
+- `-e OLLAMA_MODEL` : le modèle téléchargé automatiquement au démarrage (idempotent — ne re-télécharge rien s'il est déjà présent). Doit correspondre exactement au champ **Modèle** saisi dans les paramètres IA de Synco.
+- GPU Nvidia : ajoutez `--gpus all` (nécessite le [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) sur l'hôte).
+- `docker logs -f synco-ai-gateway` pendant le premier démarrage : le téléchargement du modèle peut prendre plusieurs minutes selon sa taille et votre bande passante — c'est normal, le `HEALTHCHECK` laisse 5 minutes avant de s'inquiéter.
+
+Une fois `docker logs` calme (Ollama et la passerelle prêts), configurez Synco avec l'URL publique de ce conteneur pour la passerelle, et `http://localhost:11434` pour l'URL Ollama — les deux vivent dans le même conteneur, la passerelle contacte Ollama en local.
+
+### Déploiement avancé : Ollama et la passerelle séparés
+
+Si vous voulez qu'Ollama et la passerelle puissent être mis à jour indépendamment, ou qu'un Ollama existant serve plusieurs services, utilisez plutôt `Dockerfile.gateway-only` (image passerelle seule) avec `docker-compose.example.yml` (Ollama dans un conteneur séparé) :
 
 ```bash
 cp docker-compose.example.yml docker-compose.yml
 # éditez ALLOWED_ORIGIN pour pointer vers l'origine de votre instance Synco
 docker compose up -d
+docker compose exec ollama ollama pull llama3.1:8b
 ```
-
-Le premier démarrage télécharge l'image Ollama ; pensez à `docker exec -it <container_ollama> ollama pull <modèle>` pour récupérer un modèle avant de configurer Synco.
 
 ## Démarrage sans Docker
 
