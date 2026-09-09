@@ -39,6 +39,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/health", get(routes::health::health))
+        .route("/models", get(routes::models::list_models))
         .route("/chat", post(routes::chat::chat))
         .route("/chat/{session_id}/tool-result", post(routes::chat::tool_result))
         .with_state(state)
