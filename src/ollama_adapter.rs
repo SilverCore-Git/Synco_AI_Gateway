@@ -1,4 +1,4 @@
-use crate::types::StoredMessage;
+use crate::types::{StoredMessage, ToolSpec};
 use async_stream::stream;
 use futures_util::{Stream, StreamExt};
 use serde_json::{json, Value};
@@ -9,12 +9,6 @@ pub enum NormalizedEvent {
     Text { delta: String },
     ToolCall { id: String, name: String, args_json: String },
     Done { finish_reason: String },
-}
-
-pub struct ToolManifestEntry {
-    pub name: String,
-    pub description: String,
-    pub parameters: Value,
 }
 
 /// Équivalent de toWireMessages() dans providerAdapters/openai.ts. Ollama expose un endpoint
@@ -78,7 +72,7 @@ pub fn create_completion(
     model_id: String,
     system_prompt: String,
     messages: Vec<StoredMessage>,
-    tools: Vec<ToolManifestEntry>,
+    tools: Vec<ToolSpec>,
 ) -> impl Stream<Item = NormalizedEvent> {
     stream! {
         let mut body = json!({

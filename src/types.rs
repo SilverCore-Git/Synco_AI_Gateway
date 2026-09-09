@@ -45,8 +45,21 @@ pub struct PendingToolCall {
     pub interactive: bool,
 }
 
-/// "idle" | "awaiting_confirmation" | "awaiting_client_tool"
-pub type SessionStatus = String;
+/// Une entrée du manifeste renvoyé par GET /api/orgs/:orgId/ai/tools côté synco_api — c'est la
+/// même decision que celle prise par AiTurnRunner: category='server' + mutating=false → auto-exec,
+/// category='server' + mutating=true → pause pour confirmation, category='client' → toujours géré
+/// par le frontend, jamais par cette passerelle.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSpec {
+    pub name: String,
+    pub description: String,
+    pub parameters: Value,
+    pub category: String,
+    pub mutating: bool,
+    #[serde(default)]
+    pub interactive: bool,
+}
 
 /// Événements envoyés au frontend en SSE (une ligne `data: <json>` par événement) — noms de
 /// variantes et de champs choisis explicitement pour matcher au caractère près le WireEvent de

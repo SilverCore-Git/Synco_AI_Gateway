@@ -1,16 +1,21 @@
 mod config;
 mod ollama_adapter;
+mod routes;
+mod synco_client;
+mod turn_runner;
 mod types;
 
-use axum::{routing::get, Router};
+use axum::routing::{get, post};
+use axum::Router;
 use config::Config;
 use std::net::SocketAddr;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
-async fn health() -> &'static str {
-    "ok"
+#[derive(Clone)]
+pub struct AppState {
+    pub http: reqwest::Client,
 }
 
 #[tokio::main]
@@ -30,8 +35,13 @@ async fn main() {
             .allow_headers(Any)
     };
 
+    let state = AppState { http: reqwest::Client::new() };
+
     let app = Router::new()
-        .route("/health", get(health))
+        .route("/health", get(routes::health::health))
+        .route("/chat", post(routes::chat::chat))
+        .route("/chat/{session_id}/tool-result", post(routes::chat::tool_result))
+        .with_state(state)
         .layer(cors)
         .layer(TraceLayer::new_for_http());
 
