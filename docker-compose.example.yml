@@ -1,0 +1,36 @@
+# Exemple de déploiement : la passerelle + un Ollama local, sur le même réseau Docker.
+# Copiez ce fichier en docker-compose.yml et ajustez ALLOWED_ORIGIN à l'origine de votre
+# instance Synco avant de lancer `docker compose up -d`.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    # Décommentez pour exposer un GPU Nvidia au conteneur (nécessite le NVIDIA Container Toolkit) :
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  synco-ai-gateway:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: 8787
+      # Origine du frontend Synco autorisée en CORS. "*" fonctionne mais autorise n'importe
+      # quel site à appeler la passerelle depuis le navigateur d'un utilisateur authentifié :
+      # à restreindre en production.
+      ALLOWED_ORIGIN: "https://app.votre-synco.example"
+      RUST_LOG: info
+
+volumes:
+  ollama_data:
