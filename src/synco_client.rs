@@ -201,13 +201,26 @@ impl SyncoClient {
         self.decrypt_loaded_session(session)
     }
 
+    /// Une session créée ici est TOUJOURS chiffrée dès l'origine — cette passerelle n'a aucun mode
+    /// "session en clair" pour le provider gateway (encrypt_field/decrypt_field_if_encrypted
+    /// s'appliquent sans condition, cf. crypto.rs). On pose donc `encryptionScheme` dès la création :
+    /// c'est la seule fois où ça a besoin d'être posé (toute session passe par create_session avant
+    /// le premier patch_session — cf. get_or_create_session), et ça active le garde-fou anti-
+    /// downgrade déjà présent côté synco_api (PATCH /:sessionId refuse tout changement une fois
+    /// posé). synco_app lui-même ne dépend plus de ce marqueur pour décider quoi déchiffrer (il
+    /// détecte par le préfixe "gcm1:" de chaque champ), donc ceci est un bonus d'audit/traçabilité,
+    /// pas un correctif de sécurité — mais ça vaut la peine d'être exact.
     async fn create_session(&self, token: &str, org_id: &str) -> Result<LoadedSession, SyncoError> {
         let url = self.url(&format!("/api/orgs/{org_id}/ai/sessions"));
         let resp = self
             .http
             .post(&url)
             .bearer_auth(token)
-            .json(&json!({ "title": "Nouvelle session", "messages": [] }))
+            .json(&json!({
+                "title": "Nouvelle session",
+                "messages": [],
+                "encryptionScheme": "gateway-aes-gcm-v1",
+            }))
             .send()
             .await
             .map_err(|e| SyncoError::Transport(describe_reqwest_error(&e)))?;
