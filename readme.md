@@ -94,6 +94,29 @@ PORT=8787 ALLOWED_ORIGIN="https://app.votre-synco.example" ./target/release/sync
 | `SYNCO_API_ALLOW_INSECURE_TLS` | `false` (désactivé) | **Développement local uniquement.** Si votre API Synco tourne en HTTPS avec un certificat auto-signé (le cas par défaut de `synco_api` en local), rustls le rejette toujours — même après avoir cliqué "continuer" dans un navigateur. Mettre à `true` désactive la vérification du certificat pour les appels vers l'API Synco. Ne jamais activer en production. |
 | `RUST_LOG`       | `info`                     | Niveau de log (`tracing_subscriber::EnvFilter`, ex: `debug`, `synco_ai_gateway=debug`). |
 
+## Chiffrement des sessions IA
+
+Le contenu d'une session IA (messages, résultats d'outils, arguments d'appels d'outils) transite
+en clair entre le navigateur et cette passerelle (protégé par TLS, cf. plus haut), mais est
+**chiffré de bout en bout entre le navigateur et `synco_api`** : `synco_api` (l'API et sa base de
+données) ne peut jamais déchiffrer ce contenu, ni au repos ni à l'exécution. Seuls le navigateur et
+cette passerelle détiennent la clé — la passerelle doit voir le texte en clair pour appeler Ollama
+et interpréter les tool-calls, mais **ne stocke ni ne loggue jamais la clé de session**.
+
+- **Header requis** : `X-Session-Key: <base64 standard d'une clé AES-256 brute, 32 octets>`, sur
+  `POST /chat` et `POST /chat/:session_id/tool-result`. Absent ou de mauvaise longueur → `400 Bad
+  Request` (fail-closed, jamais de repli silencieux vers du clair).
+- **Algorithme** : AES-256-GCM. Chaque valeur chiffrée a la forme
+  `"gcm1:" + base64(nonce(12 octets) || ciphertext || tag(16 octets))`, avec un nonce aléatoire par
+  opération et un AAD `"{sessionId}:{messageId}:{champ}"` qui lie chaque ciphertext à son contexte
+  exact (un `synco_api` compromis ne peut pas rejouer un ciphertext d'un message/champ vers un
+  autre).
+- **Migration** : un champ non préfixé `"gcm1:"` est traité comme déjà en clair plutôt que comme
+  une erreur — les sessions créées avant l'activation de ce chiffrement restent lisibles sans
+  configuration supplémentaire.
+
+Voir `E2EE_PLAN.md` pour le détail complet du format et du modèle de menace.
+
 ## Configuration côté Synco
 
 Dans les paramètres IA de l'organisation, choisissez le provider **"Passerelle Synco AI (auto-hébergée)"** puis renseignez :
