@@ -1,3 +1,4 @@
+use crate::crypto::{self, SessionKey};
 use crate::synco_client::SyncoClient;
 use crate::turn_runner::{self, ResumeDecision, TurnContext};
 use crate::types::WireEvent;
@@ -15,6 +16,15 @@ use std::convert::Infallible;
 fn extract_bearer(headers: &HeaderMap) -> Option<String> {
     let value = headers.get("authorization")?.to_str().ok()?;
     value.strip_prefix("Bearer ").map(|s| s.to_string())
+}
+
+/// Extrait et valide le header `X-Session-Key` (E2EE_PLAN.md §3). Fail-closed : absent ou de
+/// mauvaise longueur → toujours un 400, jamais un retour silencieux vers un mode "session en
+/// clair".
+fn extract_session_key(headers: &HeaderMap) -> Result<SessionKey, Response> {
+    let invalid = || error_response(StatusCode::BAD_REQUEST, "Header X-Session-Key manquant ou invalide.");
+    let raw = headers.get("x-session-key").and_then(|v| v.to_str().ok()).ok_or_else(invalid)?;
+    crypto::parse_session_key_header(raw).map_err(|_| invalid())
 }
 
 fn error_response(status: StatusCode, message: &str) -> Response {
@@ -65,12 +75,16 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
     let Some(token) = extract_bearer(&headers) else {
         return error_response(StatusCode::UNAUTHORIZED, "Authorization Bearer token manquant.");
     };
+    let session_key = match extract_session_key(&headers) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
 
     let synco_api_url = match resolve_synco_api_url(&state, req.synco_api_url) {
         Ok(url) => url,
         Err(resp) => return resp,
     };
-    let client = SyncoClient::new(synco_api_url);
+    let client = SyncoClient::new(synco_api_url, session_key);
 
     let session = match client.get_or_create_session(&token, &req.org_id, req.session_id.as_deref()).await {
         Ok(s) => s,
@@ -118,12 +132,16 @@ pub async fn tool_result(
     let Some(token) = extract_bearer(&headers) else {
         return error_response(StatusCode::UNAUTHORIZED, "Authorization Bearer token manquant.");
     };
+    let session_key = match extract_session_key(&headers) {
+        Ok(k) => k,
+        Err(resp) => return resp,
+    };
 
     let synco_api_url = match resolve_synco_api_url(&state, req.synco_api_url) {
         Ok(url) => url,
         Err(resp) => return resp,
     };
-    let client = SyncoClient::new(synco_api_url);
+    let client = SyncoClient::new(synco_api_url, session_key);
 
     let session = match client.get_session(&token, &req.org_id, &session_id).await {
         Ok(s) => s,

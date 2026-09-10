@@ -1,3 +1,4 @@
+use crate::crypto::{self, SessionKey};
 use crate::types::{PendingToolCall, StoredMessage, ToolSpec};
 use reqwest::Client;
 use serde_json::{json, Value};
@@ -24,6 +25,11 @@ fn describe_reqwest_error(e: &reqwest::Error) -> String {
 pub struct SyncoClient {
     http: Client,
     base_url: String,
+    /// Clé de la session IA courante — reçue via le header `X-Session-Key` à chaque requête
+    /// entrante, jamais persistée au-delà de la durée de vie de ce client construit par requête
+    /// (E2EE_PLAN.md §3/§4). Utilisée pour (dé)chiffrer `content`/`tool_result`/`arguments` aux
+    /// frontières I/O avec synco_api — voir `decrypt_loaded_session`/`encrypt_messages_for_wire`.
+    session_key: SessionKey,
 }
 
 pub struct LoadedSession {
@@ -51,7 +57,7 @@ impl std::fmt::Display for SyncoError {
 }
 
 impl SyncoClient {
-    pub fn new(base_url: String) -> Self {
+    pub fn new(base_url: String, session_key: SessionKey) -> Self {
         // Développement local uniquement : synco_api tourne souvent en HTTPS avec un certificat
         // auto-signé (certs/server.crt). Le navigateur laisse l'utilisateur cliquer "continuer
         // quand même" une fois ; rustls, lui, refuse toujours un certificat non approuvé, sans
@@ -70,7 +76,7 @@ impl SyncoClient {
             Client::new()
         };
 
-        Self { http, base_url }
+        Self { http, base_url, session_key }
     }
 
     fn url(&self, path: &str) -> String {
@@ -100,6 +106,82 @@ impl SyncoClient {
         })
     }
 
+    /// Déchiffre en place `content`/`tool_result`/`tool_calls[].arguments`/`pending_tool_call.args`
+    /// (E2EE_PLAN.md §4, section `synco_client.rs`). Les champs déjà en clair (sessions écrites
+    /// avant activation du chiffrement) passent au travers inchangés, voir
+    /// `crypto::decrypt_field_if_encrypted`.
+    fn decrypt_loaded_session(&self, mut session: LoadedSession) -> Result<LoadedSession, SyncoError> {
+        let session_id = session.id.clone();
+
+        for msg in &mut session.messages {
+            if let Some(content) = msg.content.take() {
+                let decrypted = crypto::decrypt_field_if_encrypted(&self.session_key, &session_id, &msg.id, "content", &content)
+                    .map_err(|e| SyncoError::Transport(format!("Déchiffrement du contenu du message échoué: {e}")))?;
+                msg.content = Some(decrypted);
+            }
+
+            if let Some(tool_result) = msg.tool_result.take() {
+                let decrypted = crypto::decrypt_json_field_if_encrypted(&self.session_key, &session_id, &msg.id, "tool_result", tool_result)
+                    .map_err(|e| SyncoError::Transport(format!("Déchiffrement du résultat d'outil échoué: {e}")))?;
+                msg.tool_result = Some(decrypted);
+            }
+
+            if let Some(tool_calls) = &mut msg.tool_calls {
+                for tc in tool_calls.iter_mut() {
+                    let field_name = format!("tool_call_arguments:{}", tc.id);
+                    tc.arguments = crypto::decrypt_json_field_if_encrypted(&self.session_key, &session_id, &msg.id, &field_name, tc.arguments.clone())
+                        .map_err(|e| SyncoError::Transport(format!("Déchiffrement des arguments d'outil échoué: {e}")))?;
+                }
+            }
+        }
+
+        if let Some(pending) = &mut session.pending_tool_call {
+            pending.args = crypto::decrypt_json_field_if_encrypted(
+                &self.session_key,
+                &session_id,
+                "__pending__",
+                "pending_tool_call_args",
+                pending.args.clone(),
+            )
+            .map_err(|e| SyncoError::Transport(format!("Déchiffrement de l'appel d'outil en attente échoué: {e}")))?;
+        }
+
+        Ok(session)
+    }
+
+    /// Chiffre une copie de `messages` pour l'envoi PATCH (E2EE_PLAN.md §4). `id`, `role`,
+    /// `tool_call_id`, `created_at` restent en clair — nécessaires à synco_api/au frontend sans
+    /// déchiffrement.
+    fn encrypt_messages_for_wire(&self, session_id: &str, messages: &[StoredMessage]) -> Vec<StoredMessage> {
+        messages
+            .iter()
+            .cloned()
+            .map(|mut m| {
+                if let Some(content) = &m.content {
+                    m.content = Some(crypto::encrypt_field(&self.session_key, session_id, &m.id, "content", content));
+                }
+                if let Some(tool_result) = &m.tool_result {
+                    m.tool_result = Some(Value::String(crypto::encrypt_json_field(&self.session_key, session_id, &m.id, "tool_result", tool_result)));
+                }
+                if let Some(tool_calls) = &mut m.tool_calls {
+                    for tc in tool_calls.iter_mut() {
+                        let field_name = format!("tool_call_arguments:{}", tc.id);
+                        tc.arguments = Value::String(crypto::encrypt_json_field(&self.session_key, session_id, &m.id, &field_name, &tc.arguments));
+                    }
+                }
+                m
+            })
+            .collect()
+    }
+
+    /// Chiffre une copie de `pending` pour l'envoi PATCH ; `id`, `name`, `category`, `mutating`,
+    /// `interactive` restent en clair, seul `args` est sensible.
+    fn encrypt_pending_for_wire(&self, session_id: &str, pending: &PendingToolCall) -> PendingToolCall {
+        let mut p = pending.clone();
+        p.args = Value::String(crypto::encrypt_json_field(&self.session_key, session_id, "__pending__", "pending_tool_call_args", &pending.args));
+        p
+    }
+
     pub async fn get_or_create_session(
         &self,
         token: &str,
@@ -115,7 +197,8 @@ impl SyncoClient {
     pub async fn get_session(&self, token: &str, org_id: &str, session_id: &str) -> Result<LoadedSession, SyncoError> {
         let url = self.url(&format!("/api/orgs/{org_id}/ai/sessions/{session_id}"));
         let resp = self.http.get(&url).bearer_auth(token).send().await.map_err(|e| SyncoError::Transport(describe_reqwest_error(&e)))?;
-        Self::parse_session_response(resp).await
+        let session = Self::parse_session_response(resp).await?;
+        self.decrypt_loaded_session(session)
     }
 
     async fn create_session(&self, token: &str, org_id: &str) -> Result<LoadedSession, SyncoError> {
@@ -128,7 +211,8 @@ impl SyncoClient {
             .send()
             .await
             .map_err(|e| SyncoError::Transport(describe_reqwest_error(&e)))?;
-        Self::parse_session_response(resp).await
+        let session = Self::parse_session_response(resp).await?;
+        self.decrypt_loaded_session(session)
     }
 
     pub async fn patch_session(
@@ -141,14 +225,16 @@ impl SyncoClient {
         pending_tool_call: Option<&PendingToolCall>,
     ) -> Result<(), SyncoError> {
         let url = self.url(&format!("/api/orgs/{org_id}/ai/sessions/{session_id}"));
+        let encrypted_messages = self.encrypt_messages_for_wire(session_id, messages);
+        let encrypted_pending = pending_tool_call.map(|p| self.encrypt_pending_for_wire(session_id, p));
         let resp = self
             .http
             .patch(&url)
             .bearer_auth(token)
             .json(&json!({
-                "messages": messages,
+                "messages": encrypted_messages,
                 "status": status,
-                "pendingToolCall": pending_tool_call,
+                "pendingToolCall": encrypted_pending,
             }))
             .send()
             .await

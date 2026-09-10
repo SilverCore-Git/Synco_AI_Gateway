@@ -12,6 +12,7 @@ const TAG_LEN: usize = 16;
 
 /// Clé AES-256 brute (32 octets), transmise par le navigateur à chaque requête via le header
 /// `X-Session-Key`. Jamais persistée, jamais logguée — `Debug` masque volontairement la valeur.
+#[derive(Clone, Copy)]
 pub struct SessionKey([u8; 32]);
 
 impl std::fmt::Debug for SessionKey {
