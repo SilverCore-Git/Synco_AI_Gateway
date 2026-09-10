@@ -16,3 +16,5 @@ uuid = { version = "1", features = ["v4"] }
 futures-util = "0.3"
 async-stream = "0.3"
 time = { version = "0.3", features = ["formatting"] }
+aes-gcm = "0.11"
+base64 = "0.23"
