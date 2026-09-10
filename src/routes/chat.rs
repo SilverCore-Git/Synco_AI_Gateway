@@ -86,9 +86,21 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
     };
     let client = SyncoClient::new(synco_api_url, session_key);
 
-    let session = match client.get_or_create_session(&token, &req.org_id, req.session_id.as_deref()).await {
+    // get_or_create_session (lit/crée LA session) et get_tools_manifest (lit le manifeste des
+    // tools de l'org) sont deux appels synco_api totalement indépendants l'un de l'autre — les
+    // paralléliser économise un aller-retour réseau complet avant même le premier appel à Ollama.
+    let (session_result, tools_result) = tokio::join!(
+        client.get_or_create_session(&token, &req.org_id, req.session_id.as_deref()),
+        client.get_tools_manifest(&token, &req.org_id),
+    );
+
+    let session = match session_result {
         Ok(s) => s,
         Err(e) => return error_response(StatusCode::BAD_GATEWAY, &e.to_string()),
+    };
+    let tools = match tools_result {
+        Ok(t) => t,
+        Err(e) => return error_response(StatusCode::BAD_GATEWAY, &format!("Impossible de récupérer la liste des outils: {e}")),
     };
 
     let ctx = TurnContext {
@@ -104,7 +116,7 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
         async move { WireEvent::Session { session_id } }
     });
 
-    let body = turn_runner::start_turn(client, state.http, ctx, session.messages, req.message);
+    let body = turn_runner::start_turn(client, state.http, ctx, session.messages, req.message, tools);
 
     sse_response(session_event.chain(body))
 }
@@ -143,9 +155,19 @@ pub async fn tool_result(
     };
     let client = SyncoClient::new(synco_api_url, session_key);
 
-    let session = match client.get_session(&token, &req.org_id, &session_id).await {
+    // Même parallélisation que chat() : get_session et get_tools_manifest sont indépendants.
+    let (session_result, tools_result) = tokio::join!(
+        client.get_session(&token, &req.org_id, &session_id),
+        client.get_tools_manifest(&token, &req.org_id),
+    );
+
+    let session = match session_result {
         Ok(s) => s,
         Err(e) => return error_response(StatusCode::BAD_GATEWAY, &e.to_string()),
+    };
+    let tools = match tools_result {
+        Ok(t) => t,
+        Err(e) => return error_response(StatusCode::BAD_GATEWAY, &format!("Impossible de récupérer la liste des outils: {e}")),
     };
 
     if session.status == "idle" {
@@ -164,7 +186,7 @@ pub async fn tool_result(
     };
 
     let decision = ResumeDecision { accepted: req.accepted, client_result: req.client_result };
-    let body = turn_runner::resume_turn(client, state.http, ctx, session.messages, pending, decision);
+    let body = turn_runner::resume_turn(client, state.http, ctx, session.messages, pending, decision, tools);
 
     sse_response(body)
 }

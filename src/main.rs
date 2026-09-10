@@ -30,6 +30,13 @@ async fn main() {
     let config = Config::from_env();
 
     let cors = if config.allowed_origin == "*" {
+        tracing::warn!(
+            "ALLOWED_ORIGIN n'est pas configuré : CORS accepte actuellement N'IMPORTE QUELLE origine. \
+             Ça n'expose ni la clé de session ni le token Bearer (ils vivent en mémoire JS côté \
+             synco_app, jamais accessibles à une autre origine sans XSS préalable), mais retire une \
+             couche de défense en profondeur. À restreindre à l'origine exacte de synco_app en \
+             production (ex: ALLOWED_ORIGIN=https://app.mon-organisation.fr)."
+        );
         CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any)
     } else {
         CorsLayer::new()

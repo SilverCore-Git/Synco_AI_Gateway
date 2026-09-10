@@ -1,6 +1,6 @@
 use crate::ollama_adapter::{self, NormalizedEvent};
 use crate::synco_client::SyncoClient;
-use crate::types::{PendingToolCall, StoredMessage, StoredToolCall, WireEvent};
+use crate::types::{PendingToolCall, StoredMessage, StoredToolCall, ToolSpec, WireEvent};
 use async_stream::stream;
 use futures_util::{Stream, StreamExt};
 use serde_json::{json, Value};
@@ -44,21 +44,19 @@ fn safe_json_parse(text: &str) -> Value {
 /// 'server' non-mutants immédiatement (en délégant à synco_api) puis relance un appel, et
 /// s'arrête (fin du stream SSE) dès qu'un tool mutant ou 'client' doit être confirmé/exécuté
 /// ailleurs — comportement identique à runLoop() côté synco_api.
+///
+/// `tools` est désormais reçu en paramètre plutôt que refetché ici : les appelants (chat()/
+/// tool_result() dans routes/chat.rs) le récupèrent en parallèle de get_or_create_session()/
+/// get_session() via tokio::join!, ces deux appels synco_api étant indépendants — ça évite un
+/// aller-retour réseau supplémentaire strictement séquentiel avant même le premier appel à Ollama.
 fn run_loop(
     client: SyncoClient,
     http: reqwest::Client,
     ctx: TurnContext,
     mut messages: Vec<StoredMessage>,
+    tools: Vec<ToolSpec>,
 ) -> impl Stream<Item = WireEvent> {
     stream! {
-        let tools = match client.get_tools_manifest(&ctx.token, &ctx.org_id).await {
-            Ok(t) => t,
-            Err(e) => {
-                yield WireEvent::Error { error: format!("Impossible de récupérer la liste des outils: {e}") };
-                return;
-            }
-        };
-
         loop {
             let mut text_buffer = String::new();
             let mut pending_call: Option<(String, String, String)> = None;
@@ -205,6 +203,7 @@ pub fn start_turn(
     ctx: TurnContext,
     history: Vec<StoredMessage>,
     user_text: String,
+    tools: Vec<ToolSpec>,
 ) -> impl Stream<Item = WireEvent> {
     stream! {
         let mut messages = history;
@@ -223,7 +222,7 @@ pub fn start_turn(
             return;
         }
 
-        let mut inner = Box::pin(run_loop(client, http, ctx, messages));
+        let mut inner = Box::pin(run_loop(client, http, ctx, messages, tools));
         while let Some(ev) = inner.next().await {
             yield ev;
         }
@@ -237,6 +236,7 @@ pub fn resume_turn(
     history: Vec<StoredMessage>,
     pending: PendingToolCall,
     decision: ResumeDecision,
+    tools: Vec<ToolSpec>,
 ) -> impl Stream<Item = WireEvent> {
     stream! {
         let mut messages = history;
@@ -271,7 +271,7 @@ pub fn resume_turn(
             tool_call_id: pending.id.clone(), name: pending.name.clone(), mutating: false, result: tool_result,
         };
 
-        let mut inner = Box::pin(run_loop(client, http, ctx, messages));
+        let mut inner = Box::pin(run_loop(client, http, ctx, messages, tools));
         while let Some(ev) = inner.next().await {
             yield ev;
         }
