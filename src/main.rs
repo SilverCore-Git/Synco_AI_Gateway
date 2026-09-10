@@ -1,4 +1,5 @@
 mod config;
+mod crypto;
 mod ollama_adapter;
 mod routes;
 mod synco_client;
