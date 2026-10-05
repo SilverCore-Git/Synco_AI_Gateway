@@ -1,6 +1,6 @@
 use crate::ollama_adapter::{self, NormalizedEvent};
 use crate::synco_client::SyncoClient;
-use crate::types::{PendingToolCall, StoredMessage, StoredToolCall, ToolSpec, WireEvent};
+use crate::types::{PendingToolCall, StoredMessage, StoredToolCall, ToolSpec, UsageInfo, WireEvent};
 use async_stream::stream;
 use futures_util::{Stream, StreamExt};
 use serde_json::{json, Value};
@@ -59,6 +59,8 @@ fn run_loop(
     stream! {
         loop {
             let mut text_buffer = String::new();
+            let mut thinking_buffer = String::new();
+            let mut turn_usage: Option<UsageInfo> = None;
             let mut pending_call: Option<(String, String, String)> = None;
             let mut finish_reason = "stop".to_string();
 
@@ -78,6 +80,14 @@ fn run_loop(
                         text_buffer.push_str(&delta);
                         yield WireEvent::Text { delta };
                     }
+                    NormalizedEvent::Thinking { delta } => {
+                        thinking_buffer.push_str(&delta);
+                        yield WireEvent::Thinking { delta };
+                    }
+                    NormalizedEvent::Usage(info) => {
+                        turn_usage = Some(info.clone());
+                        yield WireEvent::Usage { info };
+                    }
                     NormalizedEvent::ToolCall { id, name, args_json } => {
                         pending_call = Some((id, name, args_json));
                     }
@@ -95,6 +105,8 @@ fn run_loop(
                     tool_calls: None,
                     tool_call_id: None,
                     tool_result: None,
+                    thinking: if thinking_buffer.is_empty() { None } else { Some(thinking_buffer) },
+                    usage: turn_usage.clone(),
                     created_at: now_iso(),
                 });
 
@@ -124,6 +136,8 @@ fn run_loop(
                 }]),
                 tool_call_id: None,
                 tool_result: None,
+                thinking: if thinking_buffer.is_empty() { None } else { Some(thinking_buffer) },
+                usage: turn_usage.clone(),
                 created_at: now_iso(),
             });
 
@@ -136,6 +150,8 @@ fn run_loop(
                     tool_calls: None,
                     tool_call_id: Some(call_id.clone()),
                     tool_result: Some(tool_result.clone()),
+                    thinking: None,
+                    usage: None,
                     created_at: now_iso(),
                 });
                 if let Err(e) = client.patch_session(&ctx.token, &ctx.org_id, &ctx.session_id, &messages, "idle", None).await {
@@ -158,6 +174,8 @@ fn run_loop(
                     tool_calls: None,
                     tool_call_id: Some(call_id.clone()),
                     tool_result: Some(tool_result.clone()),
+                    thinking: None,
+                    usage: None,
                     created_at: now_iso(),
                 });
                 if let Err(e) = client.patch_session(&ctx.token, &ctx.org_id, &ctx.session_id, &messages, "idle", None).await {
@@ -214,6 +232,8 @@ pub fn start_turn(
             tool_calls: None,
             tool_call_id: None,
             tool_result: None,
+            thinking: None,
+            usage: None,
             created_at: now_iso(),
         });
 
@@ -259,6 +279,8 @@ pub fn resume_turn(
             tool_calls: None,
             tool_call_id: Some(pending.id.clone()),
             tool_result: Some(tool_result.clone()),
+            thinking: None,
+            usage: None,
             created_at: now_iso(),
         });
 

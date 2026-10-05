@@ -27,7 +27,7 @@ pub struct SyncoClient {
     base_url: String,
     /// Clé de la session IA courante — reçue via le header `X-Session-Key` à chaque requête
     /// entrante, jamais persistée au-delà de la durée de vie de ce client construit par requête
-    /// (E2EE_PLAN.md §3/§4). Utilisée pour (dé)chiffrer `content`/`tool_result`/`arguments` aux
+    /// (E2EE_PLAN.md §3/§4). Utilisée pour (dé)chiffrer `content`/`tool_result`/`thinking`/`arguments` aux
     /// frontières I/O avec synco_api — voir `decrypt_loaded_session`/`encrypt_messages_for_wire`.
     session_key: SessionKey,
 }
@@ -106,7 +106,7 @@ impl SyncoClient {
         })
     }
 
-    /// Déchiffre en place `content`/`tool_result`/`tool_calls[].arguments`/`pending_tool_call.args`
+    /// Déchiffre en place `content`/`tool_result`/`thinking`/`tool_calls[].arguments`/`pending_tool_call.args`
     /// (E2EE_PLAN.md §4, section `synco_client.rs`). Les champs déjà en clair (sessions écrites
     /// avant activation du chiffrement) passent au travers inchangés, voir
     /// `crypto::decrypt_field_if_encrypted`.
@@ -124,6 +124,12 @@ impl SyncoClient {
                 let decrypted = crypto::decrypt_json_field_if_encrypted(&self.session_key, &session_id, &msg.id, "tool_result", tool_result)
                     .map_err(|e| SyncoError::Transport(format!("Déchiffrement du résultat d'outil échoué: {e}")))?;
                 msg.tool_result = Some(decrypted);
+            }
+
+            if let Some(thinking) = msg.thinking.take() {
+                let decrypted = crypto::decrypt_field_if_encrypted(&self.session_key, &session_id, &msg.id, "thinking", &thinking)
+                    .map_err(|e| SyncoError::Transport(format!("Déchiffrement du raisonnement échoué: {e}")))?;
+                msg.thinking = Some(decrypted);
             }
 
             if let Some(tool_calls) = &mut msg.tool_calls {
@@ -149,7 +155,7 @@ impl SyncoClient {
         Ok(session)
     }
 
-    /// Chiffre une copie de `messages` pour l'envoi PATCH (E2EE_PLAN.md §4). `id`, `role`,
+    /// Chiffre une copie de `messages` pour l'envoi PATCH (E2EE_PLAN.md §4) : `content`/`tool_result`/`thinking`/`tool_calls[].arguments`. `id`, `role`,
     /// `tool_call_id`, `created_at` restent en clair — nécessaires à synco_api/au frontend sans
     /// déchiffrement.
     fn encrypt_messages_for_wire(&self, session_id: &str, messages: &[StoredMessage]) -> Vec<StoredMessage> {
@@ -162,6 +168,9 @@ impl SyncoClient {
                 }
                 if let Some(tool_result) = &m.tool_result {
                     m.tool_result = Some(Value::String(crypto::encrypt_json_field(&self.session_key, session_id, &m.id, "tool_result", tool_result)));
+                }
+                if let Some(thinking) = &m.thinking {
+                    m.thinking = Some(crypto::encrypt_field(&self.session_key, session_id, &m.id, "thinking", thinking));
                 }
                 if let Some(tool_calls) = &mut m.tool_calls {
                     for tc in tool_calls.iter_mut() {
