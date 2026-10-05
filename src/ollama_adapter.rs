@@ -1,3 +1,4 @@
+use crate::think_tag_splitter::ThinkTagSplitter;
 use crate::types::{StoredMessage, ToolSpec, UsageInfo};
 use async_stream::stream;
 use futures_util::{Stream, StreamExt};
@@ -7,9 +8,6 @@ use serde_json::{json, Value};
 /// interne uniquement (jamais sérialisé tel quel), le turn runner le traduit en WireEvent.
 pub enum NormalizedEvent {
     Text { delta: String },
-    /// Pas encore produite ici : l'extraction `<think>...</think>` arrive en Phase 3. Le variant
-    /// existe déjà pour que turn_runner.rs n'ait pas besoin d'être retouché à ce moment-là.
-    #[allow(dead_code)]
     Thinking { delta: String },
     ToolCall { id: String, name: String, args_json: String },
     Usage(UsageInfo),
@@ -131,6 +129,9 @@ pub fn create_completion(
         let mut tool_call_args = String::new();
         let mut finish_reason = "stop".to_string();
         let mut usage: Option<UsageInfo> = None;
+        // Les modèles "raisonneurs" exposés via Ollama (DeepSeek-R1, QwQ...) mettent leur
+        // raisonnement inline entre balises plutôt que dans un champ d'API dédié.
+        let mut think_splitter = ThinkTagSplitter::default();
 
         while let Some(chunk) = byte_stream.next().await {
             let chunk = match chunk {
@@ -176,7 +177,13 @@ pub fn create_completion(
 
                 if let Some(content) = delta["content"].as_str() {
                     if !content.is_empty() {
-                        yield NormalizedEvent::Text { delta: content.to_string() };
+                        let split = think_splitter.push(content);
+                        if !split.thinking.is_empty() {
+                            yield NormalizedEvent::Thinking { delta: split.thinking };
+                        }
+                        if !split.text.is_empty() {
+                            yield NormalizedEvent::Text { delta: split.text };
+                        }
                     }
                 }
 
