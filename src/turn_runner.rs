@@ -8,10 +8,23 @@ use serde_json::{json, Value};
 /// Port de synco_api/src/services/ai/aiTurnRunner.ts. Contrairement à la version TS, il n'y a pas
 /// d'abstraction TurnPersistence injectée : un seul déploiement possible ici (SyncoClient), donc
 /// on appelle directement patch_session à chaque étape plutôt que de passer par une interface.
-const SYSTEM_PROMPT: &str = "Tu es Synco AI, un assistant IA français, sécurisé et souverain, intégré à l'outil collaboratif Synco.
+const SYSTEM_PROMPT_BASE: &str = "Tu es Synco AI, un assistant IA français, sécurisé et souverain, intégré à l'outil collaboratif Synco.
 Tes réponses doivent être concises, utiles, et toujours en français.
 Tu as accès à des outils réels pour agir sur l'organisation (créer une tâche, un espace, etc.) et pour consulter des informations. Utilise-les quand c'est pertinent, sans demander la permission avant de les appeler : l'utilisateur validera lui-même les actions qui le nécessitent.
 Si une information te manque pour utiliser un outil correctement, demande-la à l'utilisateur plutôt que d'inventer une valeur.";
+
+/// Miroir de reasoningEffortInstruction() dans synco_api/src/utils/aiPrompt.ts — même consigne,
+/// même raison d'être (cf. ce fichier TS pour le détail) : "high" invite explicitement le modèle
+/// à produire des balises <think>, seul moyen pour Ollama de révéler son raisonnement puisqu'il n'a
+/// pas de champ d'API dédié comme Gemini.
+fn system_prompt(reasoning_effort: Option<&str>) -> String {
+    let suffix = match reasoning_effort {
+        Some("low") => "\n\n[EFFORT DE RAISONNEMENT: BAS]\nRéponds directement et de façon concise, sans détailler d'étapes de raisonnement intermédiaires. Priorise la rapidité sur l'exhaustivité.",
+        Some("high") => "\n\n[EFFORT DE RAISONNEMENT: HAUT]\nAvant de répondre, réfléchis explicitement étape par étape à l'intérieur de balises <think>...</think> (envisage plusieurs angles, vérifie tes hypothèses), puis referme la balise et donne ta réponse finale après. Prends le temps nécessaire pour une réponse aussi pertinente que possible.",
+        _ => "",
+    };
+    format!("{SYSTEM_PROMPT_BASE}{suffix}")
+}
 
 #[derive(Clone)]
 pub struct TurnContext {
@@ -20,6 +33,7 @@ pub struct TurnContext {
     pub token: String,
     pub ollama_url: String,
     pub model_id: String,
+    pub reasoning_effort: Option<String>,
 }
 
 pub struct ResumeDecision {
@@ -68,7 +82,7 @@ fn run_loop(
                 http.clone(),
                 ctx.ollama_url.clone(),
                 ctx.model_id.clone(),
-                SYSTEM_PROMPT.to_string(),
+                system_prompt(ctx.reasoning_effort.as_deref()),
                 messages.clone(),
                 tools.clone(),
             );

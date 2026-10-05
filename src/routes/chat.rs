@@ -68,6 +68,8 @@ pub struct ChatRequest {
     #[serde(default)]
     pub synco_api_url: Option<String>,
     pub model_id: String,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
 }
 
 // POST /chat — démarre ou continue une conversation
@@ -109,6 +111,7 @@ pub async fn chat(State(state): State<AppState>, headers: HeaderMap, Json(req): 
         token,
         ollama_url: state.ollama_url.clone(),
         model_id: req.model_id,
+        reasoning_effort: req.reasoning_effort,
     };
 
     let session_event = futures_util::stream::once({
@@ -128,6 +131,8 @@ pub struct ToolResultRequest {
     #[serde(default)]
     pub synco_api_url: Option<String>,
     pub model_id: String,
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
     #[serde(default)]
     pub accepted: Option<bool>,
     #[serde(default)]
@@ -183,6 +188,7 @@ pub async fn tool_result(
         token,
         ollama_url: state.ollama_url.clone(),
         model_id: req.model_id,
+        reasoning_effort: req.reasoning_effort,
     };
 
     let decision = ResumeDecision { accepted: req.accepted, client_result: req.client_result };
