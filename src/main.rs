@@ -3,6 +3,7 @@ mod crypto;
 mod ollama_adapter;
 mod routes;
 mod synco_client;
+mod think_tag_splitter;
 mod turn_runner;
 mod types;
 

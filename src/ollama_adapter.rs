@@ -1,4 +1,5 @@
-use crate::types::{StoredMessage, ToolSpec};
+use crate::think_tag_splitter::ThinkTagSplitter;
+use crate::types::{StoredMessage, ToolSpec, UsageInfo};
 use async_stream::stream;
 use futures_util::{Stream, StreamExt};
 use serde_json::{json, Value};
@@ -7,7 +8,9 @@ use serde_json::{json, Value};
 /// interne uniquement (jamais sérialisé tel quel), le turn runner le traduit en WireEvent.
 pub enum NormalizedEvent {
     Text { delta: String },
+    Thinking { delta: String },
     ToolCall { id: String, name: String, args_json: String },
+    Usage(UsageInfo),
     Done { finish_reason: String },
 }
 
@@ -79,6 +82,10 @@ pub fn create_completion(
             "model": model_id,
             "messages": to_wire_messages(&system_prompt, &messages),
             "stream": true,
+            // Best-effort : ce endpoint est le shim OpenAI-compatible d'Ollama (/v1/chat/completions),
+            // pas l'API native /api/chat — le support de ce champ dépend de la version d'Ollama et
+            // du backend réel, contrairement à openai.ts où il est garanti par l'API OpenAI elle-même.
+            "stream_options": { "include_usage": true },
         });
 
         if !tools.is_empty() {
@@ -121,6 +128,10 @@ pub fn create_completion(
         let mut tool_call_name: Option<String> = None;
         let mut tool_call_args = String::new();
         let mut finish_reason = "stop".to_string();
+        let mut usage: Option<UsageInfo> = None;
+        // Les modèles "raisonneurs" exposés via Ollama (DeepSeek-R1, QwQ...) mettent leur
+        // raisonnement inline entre balises plutôt que dans un champ d'API dédié.
+        let mut think_splitter = ThinkTagSplitter::default();
 
         while let Some(chunk) = byte_stream.next().await {
             let chunk = match chunk {
@@ -147,12 +158,32 @@ pub fn create_completion(
                     Err(_) => continue,
                 };
 
+                // Chunk terminal (choices: []) : porte l'usage quand stream_options.include_usage
+                // est honoré. `json["choices"][0]` sur un tableau vide renvoie Value::Null (pas de
+                // panic), donc lire usage ici n'a pas besoin d'être conditionné à choice présent.
+                if !json["usage"].is_null() {
+                    usage = Some(UsageInfo {
+                        prompt_tokens: json["usage"]["prompt_tokens"].as_u64().map(|n| n as u32),
+                        completion_tokens: json["usage"]["completion_tokens"].as_u64().map(|n| n as u32),
+                        total_tokens: json["usage"]["total_tokens"].as_u64().map(|n| n as u32),
+                        reasoning_tokens: json["usage"]["completion_tokens_details"]["reasoning_tokens"]
+                            .as_u64()
+                            .map(|n| n as u32),
+                    });
+                }
+
                 let choice = &json["choices"][0];
                 let delta = &choice["delta"];
 
                 if let Some(content) = delta["content"].as_str() {
                     if !content.is_empty() {
-                        yield NormalizedEvent::Text { delta: content.to_string() };
+                        let split = think_splitter.push(content);
+                        if !split.thinking.is_empty() {
+                            yield NormalizedEvent::Thinking { delta: split.thinking };
+                        }
+                        if !split.text.is_empty() {
+                            yield NormalizedEvent::Text { delta: split.text };
+                        }
                     }
                 }
 
@@ -179,6 +210,10 @@ pub fn create_completion(
                 let args_json = if tool_call_args.is_empty() { "{}".to_string() } else { tool_call_args };
                 yield NormalizedEvent::ToolCall { id, name, args_json };
             }
+        }
+
+        if let Some(u) = usage {
+            yield NormalizedEvent::Usage(u);
         }
 
         yield NormalizedEvent::Done { finish_reason };
