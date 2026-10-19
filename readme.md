@@ -133,3 +133,7 @@ cargo build      # compiler
 cargo test       # tests unitaires (format JSON des événements SSE, désérialisation)
 cargo run        # lancer en local
 ```
+
+## Hook git (secrets)
+
+Le dépôt est public : `git config core.hooksPath .githooks` active le hook `pre-commit` qui exécute `scripts/check-secrets.mjs` (Node ou Bun requis) sur chaque commit. `node scripts/check-secrets.mjs --all` contrôle tout le dépôt.

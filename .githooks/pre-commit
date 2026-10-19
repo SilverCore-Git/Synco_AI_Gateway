@@ -1,0 +1,16 @@
+#!/bin/sh
+# Activé par `bun run setup` (git config core.hooksPath .githooks).
+# Le script est du JavaScript sans dépendance : Node, Bun, ou Node de l'hôte (flatpak) conviennent.
+set -e
+cd "$(git rev-parse --show-toplevel)"
+if command -v node >/dev/null 2>&1; then
+  exec node scripts/check-secrets.mjs
+elif command -v bun >/dev/null 2>&1; then
+  exec bun scripts/check-secrets.mjs
+elif [ -x "$HOME/.bun/bin/bun" ]; then
+  exec "$HOME/.bun/bin/bun" scripts/check-secrets.mjs
+elif command -v host-spawn >/dev/null 2>&1; then
+  exec host-spawn sh -c "cd '$PWD' && node scripts/check-secrets.mjs"
+fi
+echo "pre-commit : aucun interpréteur (node, bun) trouvé, commit refusé." >&2
+exit 1
