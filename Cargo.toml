@@ -1,20 +1,17 @@
 [package]
 name = "synco_ai_gateway"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [dependencies]
 axum = { version = "0.8", features = ["macros"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "time"] }
 tower-http = { version = "0.7", features = ["cors", "trace"] }
 reqwest = { version = "=0.13.4", default-features = false, features = ["json", "stream", "rustls"] }
-serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1", features = ["v4"] }
-futures-util = "0.3"
-async-stream = "0.3"
-time = { version = "0.3", features = ["formatting"] }
-aes-gcm = "0.11"
 base64 = "0.23"
+# Vérification Ed25519 des tickets sgt1. Déjà dans Cargo.lock (backend de rustls) : aucune
+# nouvelle crate. 1.18.1 publiée le 2026-09-01 (crates.io), épinglée.
+aws-lc-rs = "=1.18.1"
