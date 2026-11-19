@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # --- Build stage -----------------------------------------------------------
-FROM rust:1-slim-bookworm AS builder
+# Versions épinglées (pas de `latest`) : pour monter de version, changer les tags ici (et dans
+# rust-toolchain.toml pour Rust), reconstruire et relancer `cargo test`.
+FROM rust:1.98.1-slim-bookworm AS builder
 
 # cmake + gcc: requis pour compiler aws-lc-sys (backend crypto de rustls).
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,10 +16,10 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-RUN cargo build --release
+RUN cargo build --release --locked
 
 # --- Runtime stage -----------------------------------------------------------
-FROM debian:bookworm-slim
+FROM debian:bookworm-20261027-slim
 
 # ca-certificates : rustls s'appuie sur le magasin de certificats système pour vérifier le
 # HTTPS de synco_api (lecture des clés publiques de tickets). bash : HEALTHCHECK. Pas besoin d'OpenSSL — rustls est en pur Rust.

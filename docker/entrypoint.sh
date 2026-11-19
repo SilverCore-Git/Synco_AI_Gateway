@@ -20,8 +20,9 @@ if [ -n "${OLLAMA_MODEL:-}" ]; then
     ollama pull "$OLLAMA_MODEL" || echo "[entrypoint] Échec du téléchargement de '$OLLAMA_MODEL' — on continue quand même, réessayez avec 'docker exec <container> ollama pull $OLLAMA_MODEL'."
 fi
 
-# Lance la passerelle en arrière-plan également, pour pouvoir attendre sur les deux processus.
-/usr/local/bin/synco_ai_gateway &
+# Lance la passerelle (sans privilèges : utilisateur `gateway`) en arrière-plan également, pour
+# pouvoir attendre sur les deux processus. setpriv fait un exec : $! reste le pid de la passerelle.
+setpriv --reuid=gateway --regid=gateway --clear-groups /usr/local/bin/synco_ai_gateway &
 GATEWAY_PID=$!
 echo "[entrypoint] Passerelle démarrée (pid $GATEWAY_PID), Ollama (pid $OLLAMA_PID)."
 
