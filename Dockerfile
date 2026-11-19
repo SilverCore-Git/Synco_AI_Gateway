@@ -29,10 +29,11 @@ COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/synco_ai_gateway
 
 ENV PORT=8787
-ENV ALLOWED_ORIGIN=*
 ENV RUST_LOG=info
-# Modèle pré-téléchargé au démarrage (idempotent) — doit correspondre au champ "Modèle" saisi
-# dans les paramètres IA de Synco (provider "gateway").
+# Modèle pré-téléchargé au démarrage (idempotent) ; c'est aussi, par défaut, le seul modèle que la
+# passerelle accepte de relayer (SYNCO_ALLOWED_MODELS pour en autoriser d'autres).
+# À fournir au lancement (la passerelle refuse de démarrer sans eux) : SYNCO_API_URL,
+# SYNCO_GATEWAY_URL, SYNCO_ALLOWED_ORGS, et ALLOWED_ORIGIN pour l'accès depuis un navigateur.
 ENV OLLAMA_MODEL=llama3.2
 
 EXPOSE 8787 11434

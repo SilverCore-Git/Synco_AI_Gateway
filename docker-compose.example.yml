@@ -30,21 +30,60 @@ services:
       - "8787:8787"
     environment:
       PORT: 8787
-      # Origine du frontend Synco autorisée en CORS. "*" fonctionne mais autorise n'importe
-      # quel site à appeler la passerelle depuis le navigateur d'un utilisateur authentifié :
-      # à restreindre en production.
+      # Origine de l'app Synco autorisée en CORS (le navigateur appelle la passerelle). Sans cette
+      # variable, aucun en-tête CORS n'est émis ; "*" est possible mais déconseillé.
       ALLOWED_ORIGIN: "https://app.votre-synco.example"
-      # Ollama vit dans un conteneur séparé ici (au lieu du même conteneur pour l'image
-      # tout-en-un) : on le pointe explicitement via le nom du service Docker Compose.
+      # Ollama vit dans un conteneur séparé ici : on le pointe via le nom du service Compose.
       OLLAMA_URL: "http://ollama:11434"
-      # URL de l'API Synco vue DEPUIS CE CONTENEUR — pas depuis le navigateur, ce n'est pas la
-      # même chose. En production, l'adresse publique HTTPS habituelle fonctionne directement.
-      # En développement local, si synco_api tourne sur la machine hôte (pas dans Compose),
-      # décommentez les deux lignes suivantes (nécessaire sur Linux ; Docker Desktop sur
-      # Mac/Windows fournit déjà host.docker.internal automatiquement) :
+      # API Synco, vue DEPUIS CE CONTENEUR : sert uniquement à lire les clés publiques des tickets
+      # (GET /api/ai/ticket-keys), en HTTPS vérifié (http seulement vers localhost).
       SYNCO_API_URL: "https://api.votre-synco.example"
-      # SYNCO_API_URL: "https://host.docker.internal:9000"
-      # SYNCO_API_ALLOW_INSECURE_TLS: "true"  # si synco_api local utilise son certificat auto-signé par défaut
+      # URL publique de CETTE passerelle, exactement telle que saisie dans les paramètres IA de
+      # l'organisation Synco (elle doit égaler la revendication `gw` des tickets).
+      SYNCO_GATEWAY_URL: "https://gateway.votre-synco.example"
+      # Organisations autorisées (obligatoire), identifiants séparés par des virgules.
+      SYNCO_ALLOWED_ORGS: "identifiant-de-votre-organisation"
+      # Modèles relayés (séparés par des virgules) ; vide = tout modèle présent sur Ollama.
+      SYNCO_ALLOWED_MODELS: "llama3.1:8b"
+      RUST_LOG: info
+
+volumes:
+      - ollama_data:/root/.ollama
+    # Décommentez pour exposer un GPU Nvidia au conteneur (nécessite le NVIDIA Container Toolkit) :
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  synco-ai-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway-only
+    restart: unless-stopped
+    depends_on:
+      - ollama
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: 8787
+      # Origine de l'app Synco autorisée en CORS (le navigateur appelle la passerelle). Sans cette
+      # variable, aucun en-tête CORS n'est émis ; "*" est possible mais déconseillé.
+      ALLOWED_ORIGIN: "https://app.votre-synco.example"
+      # Ollama vit dans un conteneur séparé ici : on le pointe via le nom du service Compose.
+      OLLAMA_URL: "http://ollama:11434"
+      # API Synco, vue DEPUIS CE CONTENEUR : sert uniquement à lire les clés publiques des tickets
+      # (GET /api/ai/ticket-keys), en HTTPS vérifié (http seulement vers localhost).
+      SYNCO_API_URL: "https://api.votre-synco.example"
+      # URL publique de CETTE passerelle, exactement telle que saisie dans les paramètres IA de
+      # l'organisation Synco (elle doit égaler la revendication `gw` des tickets).
+      SYNCO_GATEWAY_URL: "https://gateway.votre-synco.example"
+      # Organisations autorisées (obligatoire), identifiants séparés par des virgules.
+      SYNCO_ALLOWED_ORGS: "identifiant-de-votre-organisation"
+      # Modèles relayés (séparés par des virgules) ; vide = tout modèle présent sur Ollama.
+      SYNCO_ALLOWED_MODELS: "llama3.1:8b"
       RUST_LOG: info
     # extra_hosts:
     #   - "host.docker.internal:host-gateway"  # requis sur Linux pour SYNCO_API_URL=...host.docker.internal...
