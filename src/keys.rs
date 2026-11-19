@@ -41,6 +41,8 @@ pub struct KeyStore {
     config: KeyStoreConfig,
     snapshot: RwLock<Option<Snapshot>>,
     last_unknown_refresh: Mutex<Option<Instant>>,
+    /// Sérialise lecture + écriture du cache : une lecture plus ancienne n'écrase jamais un jeu plus récent.
+    refresh_lock: Mutex<()>,
 }
 
 /// Client HTTP dédié : pas de redirection, délais courts.
@@ -82,6 +84,7 @@ impl KeyStore {
             config,
             snapshot: RwLock::new(None),
             last_unknown_refresh: Mutex::new(None),
+            refresh_lock: Mutex::new(()),
         }
     }
 
@@ -98,6 +101,7 @@ impl KeyStore {
 
     /// Relit les clés ; en cas d'échec, le cache existant est conservé (jusqu'à `max_stale`).
     pub async fn refresh(&self) -> bool {
+        let _serial = self.refresh_lock.lock().await;
         match self.fetch().await {
             Some(keys) => {
                 if let Ok(mut guard) = self.snapshot.write() {

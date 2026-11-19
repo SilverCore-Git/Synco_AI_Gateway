@@ -17,7 +17,7 @@ use std::time::Duration;
 use synco_ai_gateway::app::{router, AppState};
 use synco_ai_gateway::config::Config;
 use synco_ai_gateway::keys::{build_http_client, KeyStore, KeyStoreConfig};
-use synco_ai_gateway::ticket::{AllowedOrgs, Verifier};
+use synco_ai_gateway::ticket::Verifier;
 
 pub const GATEWAY_URL: &str = "https://gateway.example.com";
 pub const ORG: &str = "org_test_1";
@@ -99,6 +99,28 @@ pub struct OllamaSpy {
     pub last_body: Mutex<Option<String>>,
     pub last_headers: Mutex<Option<HeaderMap>>,
     pub paths: Mutex<Vec<String>>,
+    pub mode: Mutex<Mode>,
+    /// Requêtes de chat en cours (futur du gestionnaire ou flux de réponse encore vivants).
+    pub active: AtomicUsize,
+}
+
+#[derive(Clone, Copy, Default)]
+pub enum Mode {
+    #[default]
+    Normal,
+    /// Attend avant de répondre (en-têtes).
+    SlowHeaders(u64),
+    /// Répond tout de suite puis diffuse sans fin.
+    Endless,
+    /// Erreur d'Ollama avec un texte détaillé.
+    ModelNotFound,
+}
+
+struct ActiveGuard(Arc<OllamaSpy>);
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        self.0.active.fetch_sub(1, Ordering::SeqCst);
+    }
 }
 
 pub struct FakeOllama {
@@ -125,18 +147,52 @@ async fn ollama_handler(
         .push(uri.path().to_string());
     *spy.last_body.lock().expect("verrou") = Some(String::from_utf8_lossy(&body).into_owned());
     *spy.last_headers.lock().expect("verrou") = Some(headers);
+    if uri.path() == "/v1/chat/completions" {
+        spy.active.fetch_add(1, Ordering::SeqCst);
+        let guard = ActiveGuard(spy.clone());
+        let mode = *spy.mode.lock().expect("verrou");
+        match mode {
+            Mode::SlowHeaders(ms) => tokio::time::sleep(Duration::from_millis(ms)).await,
+            Mode::Endless => {
+                let stream = futures_util::stream::unfold(guard, |g| async move {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                    Some((
+                        Ok::<_, std::convert::Infallible>(Bytes::from_static(
+                            b"data: {\"x\":1}\n\n",
+                        )),
+                        g,
+                    ))
+                });
+                return (
+                    StatusCode::OK,
+                    [("content-type", "text/event-stream")],
+                    axum::body::Body::from_stream(stream),
+                )
+                    .into_response();
+            }
+            Mode::ModelNotFound => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    r#"{"error":"model 'secret-name' not found, try pulling it first"}"#,
+                )
+                    .into_response();
+            }
+            Mode::Normal => {}
+        }
+        drop(guard);
+        return (
+            StatusCode::OK,
+            [("content-type", "text/event-stream")],
+            "data: {\"choices\":[{\"delta\":{\"content\":\"salut\"}}]}\n\ndata: [DONE]\n\n"
+                .to_string(),
+        )
+            .into_response();
+    }
     match uri.path() {
         "/v1/models" => (
             StatusCode::OK,
             [("content-type", "application/json")],
             r#"{"object":"list","data":[{"id":"llama3.2"},{"id":"autre-modele"}]}"#.to_string(),
-        )
-            .into_response(),
-        "/v1/chat/completions" => (
-            StatusCode::OK,
-            [("content-type", "text/event-stream")],
-            "data: {\"choices\":[{\"delta\":{\"content\":\"salut\"}}]}\n\ndata: [DONE]\n\n"
-                .to_string(),
         )
             .into_response(),
         _ => (StatusCode::OK, "ollama").into_response(),
@@ -163,6 +219,8 @@ pub struct FakeApi {
     pub hits: Arc<AtomicUsize>,
     /// Corps renvoyé par `GET /api/ai/ticket-keys` et statut.
     pub response: Arc<Mutex<(u16, String)>>,
+    /// Délai avant de répondre (la réponse est figée à l'arrivée de la requête).
+    pub delay_ms: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl FakeApi {
@@ -187,16 +245,18 @@ pub async fn fake_api(keys: &[&TestKey]) -> FakeApi {
         addr: ([127, 0, 0, 1], 0).into(),
         hits: Arc::new(AtomicUsize::new(0)),
         response: Arc::new(Mutex::new((200, String::new()))),
+        delay_ms: Arc::new(std::sync::atomic::AtomicU64::new(0)),
     };
     api.publish(keys);
-    let (hits, response) = (api.hits.clone(), api.response.clone());
+    let (hits, response, delay) = (api.hits.clone(), api.response.clone(), api.delay_ms.clone());
     let app = Router::new().route(
         "/api/ai/ticket-keys",
         get(move || {
-            let (hits, response) = (hits.clone(), response.clone());
+            let (hits, response, delay) = (hits.clone(), response.clone(), delay.clone());
             async move {
                 hits.fetch_add(1, Ordering::SeqCst);
                 let (status, body) = response.lock().expect("verrou").clone();
+                tokio::time::sleep(Duration::from_millis(delay.load(Ordering::SeqCst))).await;
                 (
                     StatusCode::from_u16(status).expect("statut"),
                     [("content-type", "application/json")],
@@ -220,7 +280,9 @@ pub struct Options {
     pub allowed_models: Vec<String>,
     pub max_body_bytes: usize,
     pub keys: KeyStoreConfig,
-    pub allowed_orgs: AllowedOrgs,
+    pub allowed_orgs: Vec<String>,
+    pub max_concurrent: usize,
+    pub max_per_user: usize,
 }
 
 impl Default for Options {
@@ -230,7 +292,9 @@ impl Default for Options {
             allowed_models: vec!["llama3.2".into()],
             max_body_bytes: 64 * 1024,
             keys: KeyStoreConfig::default(),
-            allowed_orgs: AllowedOrgs::List(vec![ORG.to_string()]),
+            allowed_orgs: vec![ORG.to_string()],
+            max_concurrent: 16,
+            max_per_user: 4,
         }
     }
 }
@@ -256,6 +320,8 @@ pub async fn start_gateway(key: &TestKey, opts: Options) -> Gateway {
         allowed_models: opts.allowed_models.clone(),
         max_body_bytes: opts.max_body_bytes,
         max_tokens: 4096,
+        max_concurrent: opts.max_concurrent,
+        max_concurrent_per_user: opts.max_per_user,
     };
     let keys = Arc::new(KeyStore::new(
         build_http_client().expect("client"),
@@ -318,10 +384,12 @@ pub async fn start_gateway_with_unreadable_api(key: &TestKey) -> Gateway {
         ollama_url: format!("http://{}", ollama.addr),
         synco_api_url: format!("http://{}", api.addr),
         gateway_url: GATEWAY_URL.into(),
-        allowed_orgs: AllowedOrgs::List(vec![ORG.to_string()]),
+        allowed_orgs: vec![ORG.to_string()],
         allowed_models: vec![],
         max_body_bytes: 64 * 1024,
         max_tokens: 4096,
+        max_concurrent: 16,
+        max_concurrent_per_user: 4,
     };
     let keys = Arc::new(KeyStore::new(
         build_http_client().expect("client"),

@@ -12,6 +12,9 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 base64 = "0.23"
-# Vérification Ed25519 des tickets sgt1. Déjà dans Cargo.lock (backend de rustls) : aucune
-# nouvelle crate. 1.18.1 publiée le 2026-09-01 (crates.io), épinglée.
+# Vérification Ed25519 des tickets sgt1. aws-lc-rs 1.18.1 (publiée le 2026-09-01) était déjà dans
+# Cargo.lock (backend de rustls), mais l'utiliser en direct ajoute la crate transitive
+# `untrusted 0.7.1` (publiée le 2020-04-28), nouvelle dans le lock. Épinglée.
 aws-lc-rs = "=1.18.1"
+# Déjà dans Cargo.lock (reqwest) : seulement `StreamExt::map` pour tenir la place du limiteur.
+futures-util = { version = "0.3", default-features = false }

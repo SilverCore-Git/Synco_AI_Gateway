@@ -48,27 +48,12 @@ impl TicketError {
     }
 }
 
-/// Organisations autorisées (`SYNCO_ALLOWED_ORGS`). `Any` n'existe que par choix explicite.
-#[derive(Clone, Debug)]
-pub enum AllowedOrgs {
-    List(Vec<String>),
-    Any,
-}
-
-impl AllowedOrgs {
-    fn allows(&self, org: &str) -> bool {
-        match self {
-            Self::Any => true,
-            Self::List(list) => list.iter().any(|o| o == org),
-        }
-    }
-}
-
 /// Ce que connaît la passerelle : sa propre URL canonique et les orgs admises.
 #[derive(Clone, Debug)]
 pub struct Verifier {
     pub gateway_url: String,
-    pub allowed_orgs: AllowedOrgs,
+    /// `SYNCO_ALLOWED_ORGS` (02 §5 étape 8). Une liste vide n'autorise personne (échec fermé).
+    pub allowed_orgs: Vec<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -235,7 +220,7 @@ impl Verifier {
         if gw != self.gateway_url {
             return Err(WrongAudience);
         }
-        if !self.allowed_orgs.allows(&claims.org) {
+        if !self.allowed_orgs.contains(&claims.org) {
             return Err(WrongOrg);
         }
         Ok(claims)

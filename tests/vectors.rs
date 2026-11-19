@@ -4,8 +4,7 @@
 use serde_json::Value;
 use synco_ai_gateway::keys::parse_keys_document;
 use synco_ai_gateway::ticket::{
-    decode_b64u_exact, AllowedOrgs, KeyMap, Verifier, CLOCK_SKEW_SECS, MAX_LENGTH,
-    MAX_LIFETIME_SECS,
+    decode_b64u_exact, KeyMap, Verifier, CLOCK_SKEW_SECS, MAX_LENGTH, MAX_LIFETIME_SECS,
 };
 
 const VECTORS: &str = include_str!("vectors/tickets-gateway.json");
@@ -44,14 +43,12 @@ fn tous_les_vecteurs_sgt1_sont_rejoues() {
         );
         let verifier = Verifier {
             gateway_url: case["gatewayUrl"].as_str().expect("gatewayUrl").to_string(),
-            allowed_orgs: AllowedOrgs::List(
-                case["allowedOrgs"]
-                    .as_array()
-                    .expect("allowedOrgs")
-                    .iter()
-                    .map(|o| o.as_str().expect("org").to_string())
-                    .collect(),
-            ),
+            allowed_orgs: case["allowedOrgs"]
+                .as_array()
+                .expect("allowedOrgs")
+                .iter()
+                .map(|o| o.as_str().expect("org").to_string())
+                .collect(),
         };
         let now = case["now"].as_u64().expect("now");
         let expect = case["expect"].as_str().expect("expect");

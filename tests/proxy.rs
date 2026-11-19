@@ -2,7 +2,6 @@ mod common;
 use common::*;
 use std::time::Duration;
 use synco_ai_gateway::keys::KeyStoreConfig;
-use synco_ai_gateway::ticket::AllowedOrgs;
 
 async fn code(resp: reqwest::Response) -> (u16, String) {
     let status = resp.status().as_u16();
@@ -462,19 +461,221 @@ async fn demarrage_sans_cles_lisibles_refuse_tout() {
 }
 
 #[tokio::test]
-async fn org_quelconque_seulement_si_demande_explicitement() {
+async fn liste_d_orgs_vide_n_autorise_personne() {
     let key = TestKey::new("k1", 7);
     let gw = start_gateway(
         &key,
         Options {
-            allowed_orgs: AllowedOrgs::Any,
+            allowed_orgs: vec![],
             ..Options::default()
         },
     )
     .await;
-    let t = key.gateway_ticket(&Claims {
-        org: "n_importe_laquelle",
-        ..Claims::valid()
-    });
+    let t = key.gateway_ticket(&Claims::valid());
+    assert_eq!(
+        code(gw.chat(Some(&t), CHAT_BODY).await).await,
+        (401, "ticket_wrong_org".into())
+    );
+    assert_eq!(gw.ollama.calls(), 0);
+}
+
+#[tokio::test]
+async fn erreur_d_ollama_non_relayee() {
+    let key = TestKey::new("k1", 7);
+    let gw = start_gateway(&key, Options::default()).await;
+    *gw.ollama.spy.mode.lock().unwrap() = Mode::ModelNotFound;
+    let t = key.gateway_ticket(&Claims::valid());
+    let resp = gw.chat(Some(&t), CHAT_BODY).await;
+    assert_eq!(resp.status(), 502);
+    let text = resp.text().await.unwrap();
+    assert_eq!(text, r#"{"error":"upstream_error"}"#);
+    assert!(!text.contains("secret-name"));
+}
+
+async fn wait_active(gw: &Gateway, expected: usize) -> bool {
+    for _ in 0..100 {
+        if gw
+            .ollama
+            .spy
+            .active
+            .load(std::sync::atomic::Ordering::SeqCst)
+            == expected
+        {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    false
+}
+
+/// Ouvre un flux sans fin et le garde ouvert ; rend la réponse (la place reste prise).
+async fn open_stream(gw: &Gateway, ticket: &str) -> reqwest::Response {
+    let resp = gw.chat(Some(ticket), CHAT_BODY).await;
+    assert_eq!(resp.status(), 200);
+    resp
+}
+
+#[tokio::test]
+async fn limite_par_utilisateur_429_sans_appel_ollama_puis_liberation_a_la_deconnexion() {
+    let key = TestKey::new("k1", 7);
+    let gw = start_gateway(
+        &key,
+        Options {
+            max_per_user: 2,
+            max_concurrent: 10,
+            ..Options::default()
+        },
+    )
+    .await;
+    *gw.ollama.spy.mode.lock().unwrap() = Mode::Endless;
+    let t = key.gateway_ticket(&Claims::valid());
+
+    let s1 = open_stream(&gw, &t).await;
+    let _s2 = open_stream(&gw, &t).await;
+    assert!(wait_active(&gw, 2).await);
+    let calls = gw.ollama.calls();
+
+    let resp = gw.chat(Some(&t), CHAT_BODY).await;
+    assert_eq!(resp.status(), 429);
+    assert_eq!(resp.headers()["retry-after"], "1");
+    assert_eq!(
+        resp.json::<serde_json::Value>().await.unwrap()["error"],
+        "too_many_requests_user"
+    );
+    assert_eq!(
+        gw.ollama.calls(),
+        calls,
+        "Ollama ne doit pas être appelé au-delà de la limite"
+    );
+
+    // Un autre utilisateur n'est pas touché (limite par `sub`).
+    let other = key.sign_raw(
+        "sgt1",
+        b"synco-ai-gateway-ticket\0",
+        &Claims::valid().json().replace(SUB, "autre_user"),
+    );
+    let _s3 = open_stream(&gw, &other).await;
+
+    // Déconnexion du client en plein flux : le flux d'Ollama est abandonné et la place rendue.
+    drop(s1);
+    assert!(
+        wait_active(&gw, 2).await,
+        "le flux amont du client parti doit être abandonné"
+    );
     assert_eq!(gw.chat(Some(&t), CHAT_BODY).await.status(), 200);
+}
+
+#[tokio::test]
+async fn limite_globale_429() {
+    let key = TestKey::new("k1", 7);
+    let gw = start_gateway(
+        &key,
+        Options {
+            max_per_user: 5,
+            max_concurrent: 2,
+            ..Options::default()
+        },
+    )
+    .await;
+    *gw.ollama.spy.mode.lock().unwrap() = Mode::Endless;
+    let t1 = key.gateway_ticket(&Claims::valid());
+    let t2 = key.sign_raw(
+        "sgt1",
+        b"synco-ai-gateway-ticket\0",
+        &Claims::valid().json().replace(SUB, "u2"),
+    );
+    let t3 = key.sign_raw(
+        "sgt1",
+        b"synco-ai-gateway-ticket\0",
+        &Claims::valid().json().replace(SUB, "u3"),
+    );
+    let _a = open_stream(&gw, &t1).await;
+    let _b = open_stream(&gw, &t2).await;
+    let calls = gw.ollama.calls();
+    assert_eq!(
+        code(gw.chat(Some(&t3), CHAT_BODY).await).await,
+        (429, "too_many_requests".into())
+    );
+    assert_eq!(gw.ollama.calls(), calls);
+}
+
+#[tokio::test]
+async fn place_rendue_a_la_fin_du_flux() {
+    let key = TestKey::new("k1", 7);
+    let gw = start_gateway(
+        &key,
+        Options {
+            max_per_user: 1,
+            ..Options::default()
+        },
+    )
+    .await;
+    let t = key.gateway_ticket(&Claims::valid());
+    for _ in 0..3 {
+        let resp = gw.chat(Some(&t), CHAT_BODY).await;
+        assert_eq!(resp.status(), 200);
+        resp.text().await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn deconnexion_avant_la_reponse_d_ollama_abandonne_la_requete_amont() {
+    let key = TestKey::new("k1", 7);
+    let gw = start_gateway(
+        &key,
+        Options {
+            max_per_user: 1,
+            ..Options::default()
+        },
+    )
+    .await;
+    *gw.ollama.spy.mode.lock().unwrap() = Mode::SlowHeaders(5000);
+    let t = key.gateway_ticket(&Claims::valid());
+
+    let impatient = reqwest::Client::builder()
+        .timeout(Duration::from_millis(300))
+        .build()
+        .unwrap();
+    let res = impatient
+        .post(gw.url("/v1/chat/completions"))
+        .bearer_auth(&t)
+        .header("content-type", "application/json")
+        .body(CHAT_BODY)
+        .send()
+        .await;
+    assert!(res.is_err(), "le client doit avoir abandonné");
+    assert!(
+        wait_active(&gw, 0).await,
+        "la requête vers Ollama doit être abandonnée à la déconnexion du client"
+    );
+
+    // La place est rendue : une nouvelle requête passe (limite par utilisateur = 1).
+    *gw.ollama.spy.mode.lock().unwrap() = Mode::Normal;
+    assert_eq!(gw.chat(Some(&t), CHAT_BODY).await.status(), 200);
+}
+
+#[tokio::test]
+async fn relecture_des_cles_serialisee_une_lecture_ancienne_n_ecrase_pas_une_recente() {
+    let old = TestKey::new("ai-1", 1);
+    let new = TestKey::new("ai-2", 2);
+    let gw = start_gateway(&old, Options::default()).await;
+    // Lecture A : voit l'ancien jeu mais répond lentement.
+    gw.api
+        .delay_ms
+        .store(400, std::sync::atomic::Ordering::SeqCst);
+    let keys_a = gw.keys.clone();
+    let a = tokio::spawn(async move { keys_a.refresh().await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    // Lecture B : lancée après la publication d'une rotation, répond vite.
+    gw.api.publish(&[&new]);
+    gw.api
+        .delay_ms
+        .store(0, std::sync::atomic::Ordering::SeqCst);
+    assert!(gw.keys.refresh().await);
+    assert!(a.await.unwrap());
+    let current = gw.keys.current();
+    assert!(
+        current.contains_key("ai-2") && !current.contains_key("ai-1"),
+        "le jeu le plus récent doit l'emporter"
+    );
 }

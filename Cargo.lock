@@ -1260,6 +1260,7 @@ dependencies = [
  "aws-lc-rs",
  "axum",
  "base64 0.23.1",
+ "futures-util",
  "reqwest",
  "serde_json",
  "tokio",

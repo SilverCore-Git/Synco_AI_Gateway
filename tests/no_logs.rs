@@ -63,6 +63,14 @@ async fn ni_prompt_ni_reponse_ni_ticket_dans_les_journaux() {
         .await;
     gw.chat(Some(&ticket), &format!("{prompt} pas du json"))
         .await;
+    // Ticket passé (à tort) dans la requête de l'URL : jamais journalisé non plus.
+    let leaked = format!("/v1/chat/completions?ticket={ticket}");
+    gw.http
+        .post(gw.url(&leaked))
+        .body(body.clone())
+        .send()
+        .await
+        .expect("réponse");
     gw.http
         .get(gw.url("/models"))
         .bearer_auth(&ticket)

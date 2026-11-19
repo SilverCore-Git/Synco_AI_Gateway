@@ -1,13 +1,15 @@
 use crate::config::Config;
 use crate::keys::KeyStore;
+use crate::limits::Limiter;
 use crate::relay::rewrite_body;
-use crate::ticket::{peek_kid, TicketError, Verifier};
+use crate::ticket::{peek_kid, Claims, TicketError, Verifier};
 use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::{header, HeaderMap, HeaderValue, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use futures_util::StreamExt;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -23,6 +25,7 @@ pub struct AppState {
     max_tokens: u64,
     verifier: Arc<Verifier>,
     keys: Arc<KeyStore>,
+    limiter: Arc<Limiter>,
 }
 
 impl AppState {
@@ -41,6 +44,7 @@ impl AppState {
             max_tokens: config.max_tokens,
             verifier: Arc::new(verifier),
             keys,
+            limiter: Limiter::new(config.max_concurrent, config.max_concurrent_per_user),
         })
     }
 }
@@ -66,7 +70,7 @@ fn now_secs() -> u64 {
 
 /// Authentifie l'appel : `Authorization: Bearer <sgt1>`. Aucune valeur reçue (ticket compris)
 /// n'est journalisée.
-async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<(), TicketError> {
+async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<Claims, TicketError> {
     let Some(value) = headers.get(header::AUTHORIZATION) else {
         return Err(TicketError::Missing);
     };
@@ -82,7 +86,7 @@ async fn authenticate(state: &AppState, headers: &HeaderMap) -> Result<(), Ticke
         }
     }
     let keys = state.keys.current();
-    state.verifier.verify(ticket, &keys, now_secs()).map(|_| ())
+    state.verifier.verify(ticket, &keys, now_secs())
 }
 
 fn unauthorized(e: TicketError) -> Response {
@@ -132,13 +136,32 @@ async fn list_models(State(state): State<AppState>, headers: HeaderMap) -> Respo
     Json(json!({ "models": models })).into_response()
 }
 
-/// POST /v1/chat/completions — authentifie, plafonne et réécrit le corps, relaie en flux.
+/// Délai maximal pour recevoir le corps d'une requête déjà authentifiée.
+const BODY_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// POST /v1/chat/completions — authentifie, limite la concurrence, plafonne et réécrit le corps,
+/// relaie en flux.
+///
+/// La place prise dans le limiteur est tenue par ce futur puis par le flux de réponse : si le
+/// client se déconnecte (avant la réponse d'Ollama ou en cours de flux), hyper abandonne le futur
+/// ou le corps, la requête vers Ollama est annulée et la place est rendue.
 async fn chat_completions(State(state): State<AppState>, req: Request) -> Response {
     let (parts, body) = req.into_parts();
     // L'authentification précède toute lecture du corps.
-    if let Err(e) = authenticate(&state, &parts.headers).await {
-        return unauthorized(e);
-    }
+    let claims = match authenticate(&state, &parts.headers).await {
+        Ok(c) => c,
+        Err(e) => return unauthorized(e),
+    };
+    let slot = match state.limiter.try_acquire(&claims.sub) {
+        Ok(s) => s,
+        Err(e) => {
+            let mut resp = error(StatusCode::TOO_MANY_REQUESTS, e.code());
+            resp.headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+            return resp;
+        }
+    };
+
     let too_large = || error(StatusCode::PAYLOAD_TOO_LARGE, "body_too_large");
     if parts
         .headers
@@ -149,8 +172,15 @@ async fn chat_completions(State(state): State<AppState>, req: Request) -> Respon
     {
         return too_large();
     }
-    let Ok(raw) = axum::body::to_bytes(body, state.max_body_bytes).await else {
-        return too_large();
+    let raw = match tokio::time::timeout(
+        BODY_READ_TIMEOUT,
+        axum::body::to_bytes(body, state.max_body_bytes),
+    )
+    .await
+    {
+        Ok(Ok(raw)) => raw,
+        Ok(Err(_)) => return too_large(),
+        Err(_) => return error(StatusCode::REQUEST_TIMEOUT, "body_timeout"),
     };
     let forwarded = match rewrite_body(&raw, &state.allowed_models, state.max_tokens) {
         Ok(b) => b,
@@ -175,6 +205,10 @@ async fn chat_completions(State(state): State<AppState>, req: Request) -> Respon
     let Ok(upstream) = upstream else {
         return bad_gateway();
     };
+    if !upstream.status().is_success() {
+        // Le texte d'erreur d'Ollama n'est pas relayé (code machine générique).
+        return error(StatusCode::BAD_GATEWAY, "upstream_error");
+    }
 
     let mut response = Response::builder().status(upstream.status());
     for name in [header::CONTENT_TYPE, header::CACHE_CONTROL] {
@@ -182,8 +216,13 @@ async fn chat_completions(State(state): State<AppState>, req: Request) -> Respon
             response = response.header(name, v);
         }
     }
+    // La place vit autant que le flux : libérée à la fin, sur erreur ou si le client part.
+    let stream = upstream.bytes_stream().map(move |chunk| {
+        let _held = &slot;
+        chunk
+    });
     response
-        .body(Body::from_stream(upstream.bytes_stream()))
+        .body(Body::from_stream(stream))
         .unwrap_or_else(|_| bad_gateway())
 }
 
@@ -199,7 +238,9 @@ pub fn router(state: AppState, allowed_origin: Option<&str>) -> Router {
         )
         .fallback(not_found)
         .with_state(state)
-        .layer(TraceLayer::new_for_http());
+        // Span à méthode + chemin seulement : jamais la requête de l'URI (un ticket passé en
+        // `?ticket=` ne doit pas être écrit, même en DEBUG).
+        .layer(TraceLayer::new_for_http().make_span_with(|req: &Request| tracing::info_span!("request", method = %req.method(), path = %req.uri().path())));
 
     match allowed_origin {
         Some("*") => {
