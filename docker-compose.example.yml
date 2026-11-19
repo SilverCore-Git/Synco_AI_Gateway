@@ -6,8 +6,10 @@
 
 services:
   ollama:
-    image: ollama/ollama:latest
+    image: ollama/ollama:0.40.16
     restart: unless-stopped
+    # Ne publiez JAMAIS le port 11434 : Ollama n'a aucune authentification, c'est le rôle de la
+    # passerelle. Il n'est joignable que par les conteneurs de ce réseau Compose.
     volumes:
       - ollama_data:/root/.ollama
     # Décommentez pour exposer un GPU Nvidia au conteneur (nécessite le NVIDIA Container Toolkit) :
@@ -41,52 +43,14 @@ services:
       # URL publique de CETTE passerelle, exactement telle que saisie dans les paramètres IA de
       # l'organisation Synco (elle doit égaler la revendication `gw` des tickets).
       SYNCO_GATEWAY_URL: "https://gateway.votre-synco.example"
-      # Organisations autorisées (obligatoire), identifiants séparés par des virgules.
+      # Organisations autorisées (obligatoire, non vide), identifiants séparés par des virgules.
       SYNCO_ALLOWED_ORGS: "identifiant-de-votre-organisation"
       # Modèles relayés (séparés par des virgules) ; vide = tout modèle présent sur Ollama.
       SYNCO_ALLOWED_MODELS: "llama3.1:8b"
+      # Concurrence maximale vers Ollama (au total / par utilisateur) :
+      # SYNCO_MAX_CONCURRENT_REQUESTS: "16"
+      # SYNCO_MAX_CONCURRENT_PER_USER: "4"
       RUST_LOG: info
-
-volumes:
-      - ollama_data:/root/.ollama
-    # Décommentez pour exposer un GPU Nvidia au conteneur (nécessite le NVIDIA Container Toolkit) :
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-
-  synco-ai-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile.gateway-only
-    restart: unless-stopped
-    depends_on:
-      - ollama
-    ports:
-      - "8787:8787"
-    environment:
-      PORT: 8787
-      # Origine de l'app Synco autorisée en CORS (le navigateur appelle la passerelle). Sans cette
-      # variable, aucun en-tête CORS n'est émis ; "*" est possible mais déconseillé.
-      ALLOWED_ORIGIN: "https://app.votre-synco.example"
-      # Ollama vit dans un conteneur séparé ici : on le pointe via le nom du service Compose.
-      OLLAMA_URL: "http://ollama:11434"
-      # API Synco, vue DEPUIS CE CONTENEUR : sert uniquement à lire les clés publiques des tickets
-      # (GET /api/ai/ticket-keys), en HTTPS vérifié (http seulement vers localhost).
-      SYNCO_API_URL: "https://api.votre-synco.example"
-      # URL publique de CETTE passerelle, exactement telle que saisie dans les paramètres IA de
-      # l'organisation Synco (elle doit égaler la revendication `gw` des tickets).
-      SYNCO_GATEWAY_URL: "https://gateway.votre-synco.example"
-      # Organisations autorisées (obligatoire), identifiants séparés par des virgules.
-      SYNCO_ALLOWED_ORGS: "identifiant-de-votre-organisation"
-      # Modèles relayés (séparés par des virgules) ; vide = tout modèle présent sur Ollama.
-      SYNCO_ALLOWED_MODELS: "llama3.1:8b"
-      RUST_LOG: info
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"  # requis sur Linux pour SYNCO_API_URL=...host.docker.internal...
 
 volumes:
   ollama_data:

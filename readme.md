@@ -22,12 +22,17 @@ Routes exposées (toute autre route répond `404` et n'atteint **jamais** Ollama
 
 ### Corps relayé
 
-Le corps (≤ `SYNCO_MAX_BODY_BYTES`, 1 Mio par défaut, sinon `413`) est contrôlé puis réécrit avant d'atteindre Ollama :
+Le corps (≤ `SYNCO_MAX_BODY_BYTES`, **1 Mio par défaut**, sinon `413`) est contrôlé puis réécrit avant d'atteindre Ollama. Ce plafond est configurable ; l'app Synco (boucle locale) doit s'y aligner : un historique avec des **images en base64** le dépasse vite, il faut alors soit relever `SYNCO_MAX_BODY_BYTES`, soit limiter la taille côté app. Le corps doit arriver en moins de 30 s (`408 body_timeout`).
 
 - `model` doit être un modèle autorisé (`403 model_not_allowed` sinon) ;
 - `max_tokens` (et `max_completion_tokens` s'il est fourni) est plafonné à `SYNCO_MAX_TOKENS` (4096 par défaut), `n` est forcé à 1 ;
 - seuls les champs OpenAI usuels sont relayés (`messages`, `tools`, `tool_choice`, `stream`, `stream_options`, `temperature`, `top_p`, `stop`, `seed`, pénalités, `response_format`, `reasoning_effort`, `reasoning`) ; `options`, `keep_alive` et tout le reste sont supprimés ;
-- seul `Content-Type` est transmis à Ollama : ni le ticket, ni aucun autre en-tête du client.
+- seul `Content-Type` est transmis à Ollama : ni le ticket, ni aucun autre en-tête du client ;
+- une réponse d'erreur d'Ollama n'est pas relayée : le client reçoit `502 {"error":"upstream_error"}` (ou `ollama_unavailable` si Ollama est injoignable), jamais le texte d'Ollama.
+
+### Concurrence
+
+Pour qu'un utilisateur (ou un runtime) ne puisse pas saturer Ollama, le relais limite les requêtes simultanées : `SYNCO_MAX_CONCURRENT_REQUESTS` au total (16 par défaut) et `SYNCO_MAX_CONCURRENT_PER_USER` par `sub` du ticket (4 par défaut). Au-delà : `429` avec `Retry-After: 1` et un code `too_many_requests_user` ou `too_many_requests` ; Ollama n'est pas appelé. La place est tenue pendant tout le flux et libérée à sa fin ou à la déconnexion du client (la requête vers Ollama est alors abandonnée).
 
 ### Authentification (ticket `sgt1`)
 
@@ -39,7 +44,7 @@ Clés publiques : lues sur `GET {SYNCO_API_URL}/api/ai/ticket-keys` au démarrag
 
 ### Journaux
 
-Seuls la méthode, le chemin, le statut et la durée des requêtes sont journalisés. Aucun prompt, aucune réponse, aucun ticket (un test le vérifie avec un abonné `TRACE`).
+Au niveau `info` (défaut), la passerelle n'écrit rien par requête : seulement le démarrage et les avertissements (clés illisibles, configuration). La trace HTTP (`TraceLayer`, niveau `DEBUG`) ne contient que la méthode et le **chemin** (jamais la requête de l'URL, donc jamais un ticket passé en `?ticket=`), les statuts et les durées. Aucun prompt, aucune réponse, aucun ticket (un test le vérifie avec un abonné `TRACE`).
 
 ## Variables d'environnement
 
@@ -47,12 +52,13 @@ Seuls la méthode, le chemin, le statut et la durée des requêtes sont journali
 |---|---|---|
 | `SYNCO_API_URL` | **requise** | API Synco, jointe depuis la passerelle ; sert uniquement à lire les clés publiques de tickets. HTTPS (ou `http://localhost…` en développement). |
 | `SYNCO_GATEWAY_URL` | **requise** | URL publique de cette passerelle, **exactement** celle saisie dans les paramètres IA de l'organisation (forme canonique : HTTPS, sans identifiants ni requête, sans `/` final). Doit égaler la revendication `gw` des tickets. |
-| `SYNCO_ALLOWED_ORGS` | **requise** | Identifiants d'organisations Synco admises, séparés par des virgules. Sans cette liste, n'importe quelle organisation qui saisirait l'URL de votre passerelle pourrait obtenir des tickets pour elle. |
-| `SYNCO_ALLOW_ANY_ORG` | `false` | `true` autorise toute organisation (à la place de la liste ; exclusif avec elle). Déconseillé. |
-| `ALLOWED_ORIGIN` | *(aucune)* | Origine CORS de l'app Synco (ex. `https://app.votre-synco.example`). Sans valeur : aucun en-tête CORS (seul le runtime pourra appeler). `*` est accepté mais déconseillé. |
+| `SYNCO_ALLOWED_ORGS` | **requise, non vide** | Identifiants d'organisations Synco admises, séparés par des virgules (02 §5 étape 8). Sans cette liste, n'importe quelle organisation qui saisirait l'URL de votre passerelle pourrait obtenir des tickets pour elle ; il n'existe aucune option « toutes les organisations ». |
+| `ALLOWED_ORIGIN` | *(aucune)* | Origine CORS de l'app Synco : **une seule** origine `scheme://host[:port]` en minuscules, sans chemin ni `/` final ni virgule (ex. `https://app.votre-synco.example`), sinon la passerelle refuse de démarrer. Sans valeur : aucun en-tête CORS (seul le runtime pourra appeler). `*` est accepté mais déconseillé. |
 | `SYNCO_ALLOWED_MODELS` | `OLLAMA_MODEL`, sinon tout | Modèles relayés, séparés par des virgules. |
 | `SYNCO_MAX_TOKENS` | `4096` | Plafond de `max_tokens`. |
-| `SYNCO_MAX_BODY_BYTES` | `1048576` | Taille maximale du corps d'une requête. |
+| `SYNCO_MAX_BODY_BYTES` | `1048576` | Taille maximale du corps d'une requête (voir ci-dessus pour les images). |
+| `SYNCO_MAX_CONCURRENT_REQUESTS` | `16` | Requêtes de chat simultanées, tous utilisateurs confondus. |
+| `SYNCO_MAX_CONCURRENT_PER_USER` | `4` | Requêtes de chat simultanées par utilisateur. |
 | `PORT` | `8787` | Port d'écoute. |
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Où joindre Ollama (inchangé avec l'image tout-en-un). |
 | `OLLAMA_MODEL` | `llama3.2` (image tout-en-un) | Modèle pré-téléchargé au démarrage de l'image tout-en-un. |
@@ -81,6 +87,8 @@ docker run -d \
 
 - `-v synco_ollama_data:/root/.ollama` : indispensable, sinon le modèle (plusieurs Go) est retéléchargé à chaque recréation.
 - `OLLAMA_MODEL` : modèle téléchargé au démarrage ; c'est aussi le seul modèle relayé par défaut.
+- Sécurité : l'image force `OLLAMA_HOST=127.0.0.1:11434` (l'image d'Ollama écoute sinon sur toutes les interfaces) et n'expose que le port 8787 ; Ollama n'est donc joignable que par la passerelle. La passerelle tourne sous un utilisateur sans privilèges ; Ollama garde root à cause de son volume `/root/.ollama`.
+- Versions épinglées (Ollama `0.40.16`, Rust `1.98.1`, Debian `bookworm-20261027`) : voir les commentaires des Dockerfiles pour monter de version.
 - GPU Nvidia : `--gpus all` ([NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)).
 - Le `HEALTHCHECK` laisse 5 minutes au premier démarrage (téléchargement du modèle).
 - Exposez la passerelle en **HTTPS** (reverse-proxy) : l'app Synco est en HTTPS et le navigateur bloque l'appel vers un `http://` (sauf `localhost`). Si votre API Synco tourne sur la machine hôte (développement), joignez-la depuis le conteneur via `host.docker.internal` (`--add-host=host.docker.internal:host-gateway` sous Linux) ; le certificat doit être valide.
@@ -113,7 +121,7 @@ Cette version **change l'API** de la passerelle :
 
 1. **Routes retirées** : `POST /chat` et `POST /chat/{id}/tool-result` n'existent plus (404). La boucle d'agent (outils, persistance de la conversation) est désormais exécutée par l'app Synco (boucle locale) ou par le runtime Synco AI, qui appellent `POST /v1/chat/completions`. L'app Synco doit être à jour (lot L11 de la refonte) ; une app ancienne ne pourra plus utiliser ce fournisseur.
 2. **Jeton Keycloak et `X-Session-Key`** : la passerelle ne reçoit plus ni l'un ni l'autre et ne parle plus à l'API Synco que pour lire les clés publiques.
-3. **Variables à ajouter** avant la mise à jour (sinon la passerelle refuse de démarrer) : `SYNCO_GATEWAY_URL`, `SYNCO_ALLOWED_ORGS`. `SYNCO_API_URL` reste utilisé mais devient **requis** et ne sert plus qu'aux clés. `ALLOWED_ORIGIN` n'est plus `*` par défaut : sans lui, plus d'accès navigateur. `SYNCO_API_ALLOW_INSECURE_TLS` est supprimée.
+3. **Variables à ajouter** avant la mise à jour (sinon la passerelle refuse de démarrer) : `SYNCO_GATEWAY_URL`, `SYNCO_ALLOWED_ORGS` (non vide). `SYNCO_API_URL` reste utilisé mais devient **requis** et ne sert plus qu'aux clés. `ALLOWED_ORIGIN` n'est plus `*` par défaut : sans lui, plus d'accès navigateur. `SYNCO_API_ALLOW_INSECURE_TLS` est supprimée.
 4. **Conversations existantes** : les conversations créées avec la passerelle (chiffrement `gcm1:`, schéma `gateway-aes-gcm-v1`) restent stockées chiffrées par l'API et **restent lisibles dans l'app** : le déchiffrement est fait côté navigateur (format repris par la crate `synco-e2ee` et par l'app, lot L11). La passerelle n'y intervient plus ; son ancien module `crypto.rs` est supprimé.
 5. Mettez à jour dans Synco l'URL de la passerelle si elle ne correspond pas exactement à `SYNCO_GATEWAY_URL` (forme canonique) : sinon tous les tickets seront refusés (`ticket_wrong_audience`).
 
@@ -122,7 +130,7 @@ Cette version **change l'API** de la passerelle :
 ```bash
 cargo test                                   # unitaires + intégration (faux Ollama, fausse API) + vecteurs
 cargo clippy --all-targets -- -D warnings
-cargo fmt --check
+cargo fmt --check                            # toolchain épinglée par rust-toolchain.toml (1.98.1)
 ```
 
 `tests/vectors/tickets-gateway.json` est généré par le code réel de l'API (`synco_api/tests/vectors/ai-runtime/`, ne pas modifier à la main) ; `tests/vectors.rs` rejoue chaque cas et échoue au moindre écart avec le vérificateur de référence TypeScript.
