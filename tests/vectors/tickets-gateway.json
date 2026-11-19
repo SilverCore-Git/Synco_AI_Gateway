@@ -1,0 +1,443 @@
+{
+  "description": "Vecteurs des tickets sgt1 (passerelle), docs/plan/02. Générés par synco_api tests/vectors/ai-runtime/generate.ts avec le code réel de l'API ; ne pas modifier à la main. Entrées : ticket, now, gatewayUrl (URL publique configurée de la passerelle), allowedOrgs (SYNCO_ALLOWED_ORGS).",
+  "seedHex": "2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c",
+  "publicKeys": {
+    "vec-1": "lHXGzw7aNAV1KNhpR4HsySrWOdfivSd2HtPvdJJL6wc"
+  },
+  "policy": {
+    "clock_skew_secs": 30,
+    "max_lifetime_secs": 900,
+    "max_length": 2048
+  },
+  "cases": [
+    {
+      "name": "valide",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ok"
+    },
+    {
+      "name": "valide avec rt (demandé par un runtime)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJydCI6IjdkM2YyYzFlLThhNGItNGM2ZC05ZTBmLTFhMmIzYzRkNWU2ZiIsImlhdCI6MTc5NTAwMDI5MCwiZXhwIjoxNzk1MDAwNTkwfQ.U-3zQkL9QH1ggsGSLYTySP4aB60JDmLaritDRlQFPyXZjnWlxN9YmHEWpSzVx62TnmMkgQTcL8-4bmejoYm0Dg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ok"
+    },
+    {
+      "name": "expiré (exp + 31)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000621,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_expired"
+    },
+    {
+      "name": "dans la tolérance d'horloge (exp + 29)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000619,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ok"
+    },
+    {
+      "name": "à la limite de la tolérance (exp + 30)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000620,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_expired"
+    },
+    {
+      "name": "pas encore valide (iat − 31)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000259,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "dans la tolérance avant émission (iat − 30)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000260,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ok"
+    },
+    {
+      "name": "signature altérée (1 bit)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiXsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "kid inconnu",
+      "ticket": "sgt1.vec-2.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.aXFHXsMpeq8l4AawGAsfYRc1YqhDRnI5QkFHQ5sJ2cvEUBeO6F1YKtr-FGHVjdxAm8NxGbH8RS_sSeiJ36b1AQ",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_unknown_key"
+    },
+    {
+      "name": "préfixe sgt9",
+      "ticket": "sgt9.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "ticket sct1 du CDN valide (même clé, domaine CDN)",
+      "ticket": "sct1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.JaeqEOWagGnzrpuCDcddTRdOUj0LoUR1s9o-SOii_Pzcyo1lJGLCRO48bwTh0nAejBQByBnkpxdDG6HnMT6dAQ",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "ticket srt1 valide présenté à la passerelle",
+      "ticket": "srt1.vec-1.eyJvcCI6ImNvbm5lY3QiLCJzdWIiOiI2NjY2NjY2Ni03Nzc3LTQ4ODgtOTk5OS1hYWFhYWFhYWFhYWEiLCJvcmciOiJjbTNvcmdleGFtcGxlMDAwMDAwMDAwMDAwMSIsInJ0IjoiN2QzZjJjMWUtOGE0Yi00YzZkLTllMGYtMWEyYjNjNGQ1ZTZmIiwiY29udiI6IjBmMGUwZDBjLTBiMGEtNDkwOC04NzA2LTA1MDQwMzAyMDEwMCIsImlhdCI6MTc5NTAwMDI5MCwiZXhwIjoxNzk1MDAwNTkwfQ.IdfQSPBDOrfpADQXwDBE8P5FBf4mt1gz_70EdQsHcx8JeqO2_PNHcCEoL0SHIJsQea9E3mE6syG8Q_YJwwgODg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "ticket srt1 réétiqueté sgt1",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImNvbm5lY3QiLCJzdWIiOiI2NjY2NjY2Ni03Nzc3LTQ4ODgtOTk5OS1hYWFhYWFhYWFhYWEiLCJvcmciOiJjbTNvcmdleGFtcGxlMDAwMDAwMDAwMDAwMSIsInJ0IjoiN2QzZjJjMWUtOGE0Yi00YzZkLTllMGYtMWEyYjNjNGQ1ZTZmIiwiY29udiI6IjBmMGUwZDBjLTBiMGEtNDkwOC04NzA2LTA1MDQwMzAyMDEwMCIsImlhdCI6MTc5NTAwMDI5MCwiZXhwIjoxNzk1MDAwNTkwfQ.IdfQSPBDOrfpADQXwDBE8P5FBf4mt1gz_70EdQsHcx8JeqO2_PNHcCEoL0SHIJsQea9E3mE6syG8Q_YJwwgODg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "préfixe sgt1 signé avec le domaine du runtime",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.FAOdLb1od3KdO4VEGVhtdjXi5YntuZ7XToz_oCCKPoSbisv58g_xp3WOYY1SGMxsp1BSto0B6YlHhH_2XIYdAw",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "préfixe sgt1 signé avec le domaine du CDN",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0._WtkozuMqgvlg51gNGjb4Lo9LpFzNi5Di6-CfMGEGoLGWXyj_YtJKRZ_SBg0B9A1N39D-TvP2vRjfIlfG6k5DA",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "préfixe sgt1 signé sans domaine",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.G2WWKP3HuoJB4WDt2cMJ0HzJ3Top9WtQsf_2n7M7qpUpBLDUsp6Sibf5MyaWB44MTgFmiU0Uoj0CzgEXrw3fBg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "ticket sct1 du CDN réétiqueté sgt1",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.JaeqEOWagGnzrpuCDcddTRdOUj0LoUR1s9o-SOii_Pzcyo1lJGLCRO48bwTh0nAejBQByBnkpxdDG6HnMT6dAQ",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "gw = autre URL",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2F1dHJlLmV4YW1wbGUuY29tIiwiaWF0IjoxNzk1MDAwMjkwLCJleHAiOjE3OTUwMDA1OTB9.q7SJP0Z6_ST48-OXxqD8_szkB6I4I1bEs3dAiWZ-Ha04sVQl9RmUsnQn4AiXOm5D3yR-aMxXwDVM__CHw_EXAg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_wrong_audience"
+    },
+    {
+      "name": "org absente de SYNCO_ALLOWED_ORGS",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2F1dHJlMDAwMDAwMDAwMDAwMDIiLCJndyI6Imh0dHBzOi8vZ2F0ZXdheS5leGFtcGxlLmNvbSIsImlhdCI6MTc5NTAwMDI5MCwiZXhwIjoxNzk1MDAwNTkwfQ.UnN7mDbmuphV7SBJqVMMSBiPKKYZImm6FSKU1KCJPQ_6uHCmllamWr1TWwapJ9hhdddciLdRbt7xIC3-bGGABg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_wrong_org"
+    },
+    {
+      "name": "op = connect",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImNvbm5lY3QiLCJzdWIiOiI2NjY2NjY2Ni03Nzc3LTQ4ODgtOTk5OS1hYWFhYWFhYWFhYWEiLCJvcmciOiJjbTNvcmdleGFtcGxlMDAwMDAwMDAwMDAwMSIsImd3IjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUuY29tIiwiaWF0IjoxNzk1MDAwMjkwLCJleHAiOjE3OTUwMDA1OTB9.lNp09YFV2faKlq2Ay8udJhdIkUjCcZLkE8T6YMAXb8QuISljS9EpkG6FvMr7Y3Gd5vQLCBGLvbXGendMx-eSAw",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_wrong_operation"
+    },
+    {
+      "name": "champ inconnu signé (admin: true)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MCwiYWRtaW4iOnRydWV9.5uWsuruK-NfSNGobQHyS1XqZdMSNAFmkWBBavwdgRfmKX50fVGLySfQMFcoT77unMUvB7mtYHYm3Io-Eay-gBw",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "champ conv (propre à srt1) signé",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MCwiY29udiI6IjBmMGUwZDBjLTBiMGEtNDkwOC04NzA2LTA1MDQwMzAyMDEwMCJ9.6iZj67bT4bpr2pEwMHgnk3M9cfihrr5toL5fFmMdIyXc76Kf3vcIbU4Caxij_3D22wEYjUhyCRdszvyq9EWDAQ",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "rt non UUID",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJydCI6InJ1bnRpbWUtMSIsImlhdCI6MTc5NTAwMDI5MCwiZXhwIjoxNzk1MDAwNTkwfQ.iRB4Ot_eIiaN9g3HcdLmy9fxazgtHtWHri07nuSssOxRXVDCyB_A_UNFFqBW54JzPC-FnUwnr5kGX4PiHu9JAw",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "op inconnue signée",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImFkbWluIiwic3ViIjoiNjY2NjY2NjYtNzc3Ny00ODg4LTk5OTktYWFhYWFhYWFhYWFhIiwib3JnIjoiY20zb3JnZXhhbXBsZTAwMDAwMDAwMDAwMDEiLCJndyI6Imh0dHBzOi8vZ2F0ZXdheS5leGFtcGxlLmNvbSIsImlhdCI6MTc5NTAwMDI5MCwiZXhwIjoxNzk1MDAwNTkwfQ.SSPGWCFGKHj0hd2S6IpT4SBcxn_aBV0-rpVfmE6QkY43sT0LYuPr_xSfCTDQdrOS3UyMFBV97L8_vJ0IkqUeAg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "champ obligatoire absent (gw)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiaWF0IjoxNzk1MDAwMjkwLCJleHAiOjE3OTUwMDA1OTB9.GP0zEB6DvJwchH-ek0GsOoBpIKq0vRda4xaK5SS8PPrI0K7v2CC2fvCVd0x0TS5zp-wDnNbw0AYLQaGTEQsWAw",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "sub non conforme (../x)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6Ii4uL3giLCJvcmciOiJjbTNvcmdleGFtcGxlMDAwMDAwMDAwMDAwMSIsImd3IjoiaHR0cHM6Ly9nYXRld2F5LmV4YW1wbGUuY29tIiwiaWF0IjoxNzk1MDAwMjkwLCJleHAiOjE3OTUwMDA1OTB9.52azEwUL-jTX20S4dFhLP4bV6GUjqCm_DlyfPQhMEZz-yuC_yjnIC8NhS7byP6O-f5qYihJUny4pPW91EsZ3BA",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "sub non conforme (a|b)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6ImF8YiIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.KTi0kU7mzwYgft1nx0Jy8lg3iVAya9WQnzx_clcJ4QWf_gxVNnhrARdogXSnlAU7goLxCDWR3c9lY9_p3G7cDg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "sub non conforme (65 caractères)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwib3JnIjoiY20zb3JnZXhhbXBsZTAwMDAwMDAwMDAwMDEiLCJndyI6Imh0dHBzOi8vZ2F0ZXdheS5leGFtcGxlLmNvbSIsImlhdCI6MTc5NTAwMDI5MCwiZXhwIjoxNzk1MDAwNTkwfQ.gKpZN9mlcQ1fiWo4hZy4zOlv5lbsLMFnemrlC5ze3egPZAE66a5-KPz9FNcqnXQdcS7e5OKkb_l46sxAKkw2Cw",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "iat non entier",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAuNSwiZXhwIjoxNzk1MDAwNTkwfQ.Bv2nETk6fRv_neW10vhAl5_O8I6kOXyWZ_47IVF29eFqarcYsxxe9NM2eeQiZhuBb1AnfRgX2g_tYD7pSdnMCA",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "exp en chaîne",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6IjE3OTUwMDA1OTAifQ.rrXeUC_ZzdqrjfYrlCWnzJuXI1BjB2g06uQIpe_AnJzRZQf99YSkm-rcp5uFG3KQ0TWmwFxDupPywO1BH4y_BQ",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "gw de plus de 255 caractères",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20vYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhIiwiaWF0IjoxNzk1MDAwMjkwLCJleHAiOjE3OTUwMDA1OTB9.dvTJxBu2UEL2HKFrALJJ6uQ4G0SLSJdYK_Dh_bxKAfmD-9Tb7_smCM-JBOFrRgC1utqp62ruQSIsBsWt1NN3Ag",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "durée de vie 900 s (maximum)",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMTE5MH0.77iAySpdnsvM6WAkp7KFi95UeS8Hj46Q2gvazYZTwoE_5inugZHfJnrgxoBi3gCrx4utIf4TrhYkacQOSzk9Bg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ok"
+    },
+    {
+      "name": "durée de vie 901 s",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMTE5MX0.8V_v9RFIrCQ2S47cQVHHDjAoqxY2q4DcgAtv8Ea83LxQ_UcMfw2AM_TCTK_l7oeCGmphzEggmwV1bQB8HsDqAQ",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "contenu signé non JSON",
+      "ticket": "sgt1.vec-1.cGFzIGR1IGpzb24.LhHfYu_rgsGXOWSYYPFKob_hRG6Svu07fulnSrYfF4NPL-bieK-y0yz58KxqtVWQy77oT9Zm8nK5PN90J8VJBg",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "contenu signé tableau JSON",
+      "ticket": "sgt1.vec-1.WzEsMl0.xmJwIXYGBszowfan9X5djAhAKgOdDb0aDnv8y0-A8Id6TpmA6-t0eI_q-HuuQezCinBpzH5-wPhMTxTtJcckDQ",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "segment supplémentaire",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0.HnTANfiWsdDl-iAXSz4uVxdFDREnUTiLkczXNzafcJ7DrfszSeq6b9GzYVBG_VsclwJlOT3Ozp9Q9yiZxmn1AA.AAAA",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "trois segments",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MH0",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "2 049 octets",
+      "ticket": "sgt1.vec-1.eyJvcCI6ImxsbSIsInN1YiI6IjY2NjY2NjY2LTc3NzctNDg4OC05OTk5LWFhYWFhYWFhYWFhYSIsIm9yZyI6ImNtM29yZ2V4YW1wbGUwMDAwMDAwMDAwMDAxIiwiZ3ciOiJodHRwczovL2dhdGV3YXkuZXhhbXBsZS5jb20iLCJpYXQiOjE3OTUwMDAyOTAsImV4cCI6MTc5NTAwMDU5MCwicGFkIjoieHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eH",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_invalid"
+    },
+    {
+      "name": "vide",
+      "ticket": "",
+      "now": 1795000300,
+      "gatewayUrl": "https://gateway.example.com",
+      "allowedOrgs": [
+        "cm3orgexample0000000000001",
+        "cm3orgpartenaire0000000003"
+      ],
+      "expect": "ticket_missing"
+    }
+  ]
+}

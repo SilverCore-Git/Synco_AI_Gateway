@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # --- Build stage -----------------------------------------------------------
-FROM rust:1-slim-bookworm AS builder
+# Versions épinglées (pas de `latest`) : pour monter de version, changer les tags ici (et dans
+# rust-toolchain.toml pour Rust), reconstruire et relancer `cargo test`.
+FROM rust:1.98.1-slim-bookworm AS builder
 
 # cmake + gcc: requis pour compiler aws-lc-sys (backend crypto de rustls).
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,15 +16,16 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 
-RUN cargo build --release
+RUN cargo build --release --locked
 
 # --- Runtime stage -----------------------------------------------------------
-FROM debian:bookworm-slim
+FROM debian:bookworm-20261027-slim
 
-# ca-certificates : rustls s'appuie sur le magasin de certificats système pour vérifier les
-# endpoints HTTPS (synco_api en prod). Pas besoin d'OpenSSL — rustls est en pur Rust.
+# ca-certificates : rustls s'appuie sur le magasin de certificats système pour vérifier le
+# HTTPS de synco_api (lecture des clés publiques de tickets). bash : HEALTHCHECK. Pas besoin d'OpenSSL — rustls est en pur Rust.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin gateway
@@ -33,7 +36,9 @@ USER gateway
 EXPOSE 8787
 
 ENV PORT=8787
-ENV ALLOWED_ORIGIN=*
 ENV RUST_LOG=info
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD bash -c 'echo > /dev/tcp/127.0.0.1/8787' || exit 1
 
 ENTRYPOINT ["/usr/local/bin/synco_ai_gateway"]
